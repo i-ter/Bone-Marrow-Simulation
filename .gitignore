@@ -1,0 +1,36 @@
+/frames
+/data
+/movies
+# Debug symbol files
+*.dSYM/
+*.vscode
+/AP
+main
+gen_movie
+
+# Binaries
+*.exe
+*.out
+*.app
+*.o
+*.so
+*.dylib
+*.dll
+
+# Binary folders
+/bin/
+/build/
+/dist/
+
+# Compiled source
+*.com
+*.class
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
