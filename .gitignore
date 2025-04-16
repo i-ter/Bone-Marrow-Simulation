@@ -6,7 +6,7 @@
 *.vscode
 /AP
 main
-gen_movie
+gen_movie_main
 
 # Binaries
 *.exe

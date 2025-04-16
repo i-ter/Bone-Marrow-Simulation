@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <iomanip>
 #include <cstdlib>
+#include "cell_config.h"
 
 namespace fs = std::filesystem;
 
@@ -22,12 +23,10 @@ private:
     std::string framesDir;
     std::string dataDir;
     std::string videoDir;
-    std::map<std::string, sf::Color> cellColors;
-    std::map<std::string, float> cellRadii;
     
     // Cell data structure for reading from CSV
     struct CellData {
-        std::string type;
+        CellType type;
         float x, y;
         float radius;
         bool active;
@@ -36,9 +35,6 @@ private:
     // Map of step number to vector of cells for that step
     std::map<int, std::vector<CellData>> stepData;
     
-    void createFramesDirectory();
-    void loadCellColors();
-    void loadCellRadii();
     void readCellDataFromFile(const std::string& filename);
     void generateFrames();
     void createVideoFromFrames(const std::string& outputVideo, int fps);

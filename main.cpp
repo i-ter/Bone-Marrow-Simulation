@@ -10,73 +10,11 @@
 #include <sstream>
 #include <cmath>
 #include <fstream>  // Add for file operations
-
+#include "cell_config.h"  // Import the cell configuration
 
 using namespace std;
 namespace fs = std::filesystem;
 
-// Define cell types in lineage tree
-map<string, vector<string>> LINEAGE_TREE = {
-    {"HSC", {"MPP"}},
-    {"MPP", {"CMP", "CLP"}},
-    {"CMP", {"Lymphocyte", "Granulocyte", "Erythrocyte"}},
-    {"CLP", {"Lymphocyte", "Granulocyte", "Erythrocyte"}},
-};
-
-// Color mapping for each cell type
-// map<string, sf::Color> CELL_COLORS = {
-//     {"HSC", sf::Color(255, 0, 0)},           // Red
-//     {"MPP", sf::Color(255, 165, 0)},         // Orange
-//     {"CMP", sf::Color(0, 255, 0)},           // Green
-//     {"CLP", sf::Color(0, 255, 0)},           // Green
-//     {"Granulocyte", sf::Color(0, 255, 255)}, // Cyan
-//     {"Erythrocyte", sf::Color(0, 255, 255)}, // Cyan
-//     {"Lymphocyte", sf::Color(0, 255, 255)}, // Cyan
-// };
-
-// Map for cell radii
-map<string, float> CELL_RADII = {
-    {"HSC", 5.0},
-    {"MPP", 4.0},
-    {"CMP", 4.0},
-    {"CLP", 4.0},
-    {"Granulocyte", 3.0},
-    {"Erythrocyte", 3.0},
-    {"Lymphocyte", 3.0}
-};
-
-// Map for cell division probabilities
-map<string, float> DIVISION_PROB = {
-    {"HSC", 0.01},
-    {"MPP", 0.02},
-    {"CMP", 0.1},
-    {"CLP", 0.1},
-    {"Granulocyte", 0.0},
-    {"Erythrocyte", 0.0},
-    {"Lymphocyte", 0.0}
-};
-
-// Map for cell leaving probabilities
-map<string, float> LEAVE_PROB = {
-    {"HSC", 0.0},
-    {"MPP", 0.0},
-    {"CMP", 0.0},
-    {"CLP", 0.0},
-    {"Granulocyte", 0.1},
-    {"Erythrocyte", 0.1},
-    {"Lymphocyte", 0.1}
-};
-
-// Map for cell motility
-map<string, float> MOTILITY = {
-    {"HSC", 1.0},
-    {"MPP", 0.8},
-    {"CMP", 0.6},
-    {"CLP", 0.6},
-    {"Granulocyte", 0.5},
-    {"Erythrocyte", 0.5},
-    {"Lymphocyte", 0.5}
-};
 
 // Random number generator
 random_device rd;
@@ -85,16 +23,12 @@ uniform_real_distribution<> unif_01(0, 1);
 uniform_real_distribution<float> angle_dist(0, 2 * M_PI);
 uniform_real_distribution<float> angle_change(-0.5, 0.5);
 
-// Define a maximum speed constant
-const float MAX_SPEED = 1.0;
-const float CELL_DEATH_PROB = 0.01;
-
 
 // Base Cell Class
 class Cell
 {
 protected:
-    string cell_type;
+    CellType cell_type;
 
 public:
     float x, y;  // position
@@ -103,17 +37,17 @@ public:
     bool is_dead = false;
     bool is_leaving = false;
     
-    Cell(float x, float y, float radius, string type) : x(x), y(y), radius(radius), cell_type(type) {
+    Cell(float x, float y, float radius, CellType type) : cell_type(type), x(x), y(y), radius(radius) {
         // Initialize random movement direction
         float angle = angle_dist(gen);
-        float speed = (0.5 + unif_01(gen) * 0.5) * MOTILITY[cell_type]; // Adjust speed by motility
+        float speed = (0.5 + unif_01(gen) * 0.5) * MOTILITY.at(cell_type); // Adjust speed by motility
         dx = cos(angle) * speed;
         dy = sin(angle) * speed;
     }
-    
+
     virtual ~Cell() {}
 
-    const string& getType() const {
+    const CellType& getType() const {
         return cell_type;
     }
 
@@ -226,88 +160,17 @@ public:
     }
 
     virtual bool should_divide() {
-        return unif_01(gen) < DIVISION_PROB[getType()];
+        return unif_01(gen) < DIVISION_PROB.at(cell_type);
     }
 
     // Check if cell should die (all cell types)
     virtual bool should_die() {
-        return unif_01(gen) < CELL_DEATH_PROB; // 1% chance to die for all cells
+        return unif_01(gen) < CELL_DEATH_PROB.at(cell_type); // 1% chance to die for all cells
     }
     
     // Check if cell should leave (based on probability from LEAVE_PROB map)
     virtual bool should_leave() {
-        return unif_01(gen) < LEAVE_PROB[getType()];
-    }
-};
-
-// Derived Cell Classes
-class HSC : public Cell
-{
-public:
-    HSC(float x, float y, float radius) : Cell(x, y, radius, "HSC") {}
-
-    bool should_die() override {
-        return false;
-    }
-};
-
-class MPP : public Cell
-{
-public:
-    MPP(float x, float y, float radius) : Cell(x, y, radius, "MPP") {}
-};
-
-class CMP : public Cell
-{
-public:
-    CMP(float x, float y, float radius) : Cell(x, y, radius, "CMP") {}
-};
-
-class CLP : public Cell
-{
-public:
-    CLP(float x, float y, float radius) : Cell(x, y, radius, "CLP") {}
-};
-
-class Granulocyte : public Cell
-{
-public:
-    Granulocyte(float x, float y, float radius) : Cell(x, y, radius, "Granulocyte") {}
-};
-
-class Erythrocyte : public Cell
-{
-public:
-    Erythrocyte(float x, float y, float radius) : Cell(x, y, radius, "Erythrocyte") {}
-};
-
-class Lymphocyte : public Cell
-{
-public:
-    Lymphocyte(float x, float y, float radius) : Cell(x, y, radius, "Lymphocyte") {}
-};
-
-// Cell Factory
-class CellFactory
-{
-public:
-    static unique_ptr<Cell> createCell(const string &cell_type, float x, float y, float radius)
-    {
-        if (cell_type == "HSC")
-            return make_unique<HSC>(x, y, radius);
-        if (cell_type == "MPP")
-            return make_unique<MPP>(x, y, radius);
-        if (cell_type == "CMP")
-            return make_unique<CMP>(x, y, radius);
-        if (cell_type == "CLP")
-            return make_unique<CLP>(x, y, radius);
-        if (cell_type == "Granulocyte")
-            return make_unique<Granulocyte>(x, y, radius );
-        if (cell_type == "Erythrocyte")
-            return make_unique<Erythrocyte>(x, y, radius);
-        if (cell_type == "Lymphocyte")
-            return make_unique<Lymphocyte>(x, y, radius);
-        return nullptr;
+        return unif_01(gen) < LEAVE_PROB.at(cell_type);
     }
 };
 
@@ -326,8 +189,8 @@ public:
     struct Stats {
         int total_deaths = 0;
         int total_leaving = 0;
-        map<string, int> deaths_by_type;
-        map<string, int> leaving_by_type;
+        map<CellType, int> deaths_by_type;
+        map<CellType, int> leaving_by_type;
     } stats;
     
     // Spatial partitioning for collision detection optimization
@@ -401,7 +264,7 @@ public:
         {
             float x = static_cast<float>(unif_01(gen) * width);
             float y = static_cast<float>(unif_01(gen) * height);
-            cells.push_back(CellFactory::createCell("HSC", x, y, CELL_RADII["HSC"]));
+            cells.push_back(make_unique<Cell>(x, y, CELL_RADII.at(HSC), HSC));
         }
     }
     ~BoneMarrow() {
@@ -438,20 +301,20 @@ public:
         for (auto& cell : cells) {
             if (cell->should_divide()) {
                 if (cell->is_dead && cell->is_leaving ) {throw runtime_error("Cell is dead or leaving. something is wrong.");}
-                string new_type = LINEAGE_TREE[cell->getType()][rand() % LINEAGE_TREE[cell->getType()].size()];
+                CellType new_type = LINEAGE_TREE.at(cell->getType())[rand() % LINEAGE_TREE.at(cell->getType()).size()];
                 // Create new cell at a slightly offset position. overlap handling will deal w this.
                 float offset = cell->radius;
                 float new_x = cell->x + (unif_01(gen) * 2. - 1.) * offset;
                 float new_y = cell->y + (unif_01(gen) * 2. - 1.) * offset;
                 
-                new_cells.push_back(CellFactory::createCell(new_type, new_x, new_y, CELL_RADII[new_type]));
+                new_cells.push_back(make_unique<Cell>(new_x, new_y, CELL_RADII.at(new_type), new_type));
             }
         }
         
         // 4. Check for cell death and leaving
         for (auto& cell : cells) {
             if (!cell->is_dead && !cell->is_leaving) {
-                string cellType = cell->getType();
+                CellType cellType = cell->getType();
                 
                 // Check for cell death (all cell types)
                 if (cell->should_die()) {
@@ -519,7 +382,7 @@ public:
         }
         
         cout << "\nRemaining cells by type:\n";
-        map<string, int> remaining_by_type;
+        map<CellType, int> remaining_by_type;
         for (const auto& cell : cells) {
             remaining_by_type[cell->getType()]++;
         }
@@ -552,7 +415,7 @@ int main(int argc, char* argv[])
     // Default values
     float width = 1500.0;
     float height = 1000.0;
-    int initial_cells = 40;
+    int initial_cells = 20;
     int steps = 200;
     string sim_name = "bm_sim";
     

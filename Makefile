@@ -8,7 +8,7 @@ CXXFLAGS = -std=c++17 -I /opt/homebrew/include -Wall -Wextra -g
 LDFLAGS = -L /opt/homebrew/lib -lsfml-graphics -lsfml-window -lsfml-system
 
 SIM = main
-MOVIE_GEN = gen_movie
+MOVIE_GEN = gen_movie_main
 
 # Source Files
 SRCS = main.cpp

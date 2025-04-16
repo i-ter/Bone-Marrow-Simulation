@@ -4,7 +4,7 @@
 int main(int argc, char* argv[]) {
     try {
         // Default simulation name
-        std::string simName = "bm_dev";
+        std::string simName = "bm_sim";
         
         // If a simulation name is provided as command line argument, use it
         if (argc > 1) {

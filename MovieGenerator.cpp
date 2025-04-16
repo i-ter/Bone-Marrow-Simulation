@@ -13,35 +13,12 @@ MovieGenerator::MovieGenerator(int width, int height)
     if (!fs::exists(framesDir)) {
         fs::create_directory(framesDir);
     }
-    loadCellColors();
-    loadCellRadii();
 }
 
 MovieGenerator::~MovieGenerator() {
     // Nothing specific to clean up
 }
 
-void MovieGenerator::loadCellColors() {
-    // Color mapping for each cell type
-    cellColors["HSC"] = sf::Color(255, 0, 0);           // Red
-    cellColors["MPP"] = sf::Color(255, 165, 0);         // Orange
-    cellColors["CMP"] = sf::Color(0, 255, 0);           // Green
-    cellColors["CLP"] = sf::Color(0, 255, 0);           // Green
-    cellColors["Granulocyte"] = sf::Color(0, 255, 255); // Cyan
-    cellColors["Erythrocyte"] = sf::Color(0, 255, 255); // Cyan
-    cellColors["Lymphocyte"] = sf::Color(0, 255, 255);  // Cyan
-}
-
-void MovieGenerator::loadCellRadii() {
-    // Map for cell radii
-    cellRadii["HSC"] = 5.0;
-    cellRadii["MPP"] = 4.0;
-    cellRadii["CMP"] = 4.0;
-    cellRadii["CLP"] = 4.0;
-    cellRadii["Granulocyte"] = 3.0;
-    cellRadii["Erythrocyte"] = 3.0;
-    cellRadii["Lymphocyte"] = 3.0;
-}
 
 void MovieGenerator::generateMovie(const std::string& simName, int fps) {
     std::string dataFilePath = dataDir + "/" + simName + "_all_steps.csv";
@@ -81,7 +58,8 @@ void MovieGenerator::readCellDataFromFile(const std::string& filename) {
         CellData cell;
         
         // Parse cell type
-        std::getline(ss, cell.type, ',');
+        std::getline(ss, token, ',');
+        cell.type = static_cast<CellType>(std::stoi(token));
         
         // Parse x coordinate
         std::getline(ss, token, ',');
@@ -100,7 +78,7 @@ void MovieGenerator::readCellDataFromFile(const std::string& filename) {
         cell.active = (token == "0"); // Assuming 0 means active
         
         // Get radius based on cell type
-        cell.radius = cellRadii[cell.type];
+        cell.radius = CELL_RADII.at(cell.type);
         
         // Add to step data
         stepData[step].push_back(cell);
@@ -128,7 +106,8 @@ void MovieGenerator::generateFrames() {
                 cellShape.setOrigin(sf::Vector2f(cell.radius, cell.radius));
                 cellShape.setPosition(sf::Vector2f(cell.x, cell.y));
                 
-                sf::Color cellColor = cellColors[cell.type];
+                const auto& color = CELL_COLORS.at(cell.type);
+                sf::Color cellColor = sf::Color(std::get<0>(color), std::get<1>(color), std::get<2>(color));
                 cellShape.setFillColor(cellColor);
                 
                 renderTexture.draw(cellShape);
