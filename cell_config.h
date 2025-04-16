@@ -6,6 +6,10 @@
 #include <cmath>
 #include <tuple>
 
+constexpr float MAX_SPEED = 1.0f;
+constexpr float VESSEL_DISTANCE_THRESHOLD = 20.0f;
+constexpr float VESSEL_LEAVING_MULTIPLIER = 5.0f;
+
 enum CellType {
     HSC,
     MPP1,
@@ -60,12 +64,12 @@ inline const std::map<CellType, float> CELL_RADII = {
 inline const std::map<CellType, float> DIVISION_PROB = {
     {HSC, 0.01f},
     {MPP1, 0.02f},
-    {MPP2, 0.03f},
-    {MPP3, 0.04f},
-    {CMP, 0.05f},
-    {CLP, 0.05f},
-    {MEP, 0.05f},
-    {GMP, 0.05f},
+    {MPP2, 0.02f},
+    {MPP3, 0.02f},
+    {CMP, 0.03f},
+    {CLP, 0.03f},
+    {MEP, 0.03f},
+    {GMP, 0.03f},
     {Granulocyte, 0.0f},
     {Erythrocyte, 0.0f},
     {Lymphocyte, 0.0f}
@@ -81,9 +85,9 @@ inline const std::map<CellType, float> LEAVE_PROB = {
     {CLP, 0.0f},
     {MEP, 0.0f},
     {GMP, 0.0f},
-    {Granulocyte, 0.1f},
-    {Erythrocyte, 0.1f},
-    {Lymphocyte, 0.1f}
+    {Granulocyte, 0.05f},
+    {Erythrocyte, 0.05f},
+    {Lymphocyte, 0.05f}
 };
 
 // Map for cell death probabilities
@@ -130,6 +134,5 @@ inline const std::map<CellType, std::tuple<int, int, int>> CELL_COLORS = {
     {Lymphocyte, {0, 255, 255}}     // Cyan
 };
 
-constexpr float MAX_SPEED = 1.0f;
 
 #endif

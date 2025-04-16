@@ -10,9 +10,11 @@ MovieGenerator::MovieGenerator(int width, int height)
     if (!fs::exists(dataDir)) {
         fs::create_directory(dataDir);
     }
-    if (!fs::exists(framesDir)) {
-        fs::create_directory(framesDir);
+    
+    if (fs::exists(framesDir)) {
+        fs::remove_all(framesDir);
     }
+    fs::create_directory(framesDir);
 }
 
 MovieGenerator::~MovieGenerator() {
@@ -22,11 +24,14 @@ MovieGenerator::~MovieGenerator() {
 
 void MovieGenerator::generateMovie(const std::string& simName, int fps) {
     std::string dataFilePath = dataDir + "/" + simName + "_all_steps.csv";
+    std::string vesselFilePath = dataDir + "/" + simName + "_vessels.csv";
+
     std::string outputVideo = videoDir + "/" + simName + ".mp4";
     
     std::cout << "Generating movie from data: " << dataFilePath << std::endl;
 
     readCellDataFromFile(dataFilePath);
+    readVesselDataFromFile(vesselFilePath);  // Read vessel data
     
     generateFrames();
     
@@ -35,6 +40,54 @@ void MovieGenerator::generateMovie(const std::string& simName, int fps) {
     std::cout << "Movie generation complete: " << outputVideo << std::endl;
 }
 
+void MovieGenerator::readVesselDataFromFile(const std::string& vesselFilePath) {
+    std::ifstream file(vesselFilePath);
+    if (!file.is_open()) {
+        std::cerr << "Could not open vessel file: " << vesselFilePath << std::endl;
+        return;  // If file doesn't exist, we just won't draw vessels
+    }
+    
+    std::string line;
+    // Skip header line
+    std::getline(file, line);
+    
+    // Read data lines
+    while (std::getline(file, line)) {
+        std::stringstream ss(line);
+        std::string token;
+        
+        VesselData vessel;
+        
+        // Parse vessel id
+        std::getline(ss, token, ',');
+        vessel.id = std::stoi(token);
+        
+        // Parse start_x
+        std::getline(ss, token, ',');
+        vessel.start_x = std::stof(token);
+        
+        // Parse start_y
+        std::getline(ss, token, ',');
+        vessel.start_y = std::stof(token);
+        
+        // Parse end_x
+        std::getline(ss, token, ',');
+        vessel.end_x = std::stof(token);
+        
+        // Parse end_y
+        std::getline(ss, token, ',');
+        vessel.end_y = std::stof(token);
+        
+        // Parse radius
+        std::getline(ss, token, ',');
+        vessel.radius = std::stof(token);
+        
+        // Add to vessel data
+        vesselData.push_back(vessel);
+    }
+    
+    std::cout << "Read data for " << vesselData.size() << " blood vessels" << std::endl;
+}
 
 void MovieGenerator::readCellDataFromFile(const std::string& filename) {
     std::ifstream file(filename);
@@ -99,11 +152,52 @@ void MovieGenerator::generateFrames() {
     for (const auto& [step, cells] : stepData) {
         renderTexture.clear(sf::Color::Black);
         
+        // Draw blood vessels (only once per frame)
+        for (const auto& vessel : vesselData) {
+            // Calculate the direction vector of the vessel
+            float dx = vessel.end_x - vessel.start_x;
+            float dy = vessel.end_y - vessel.start_y;
+            float length = sqrt(dx * dx + dy * dy);
+            
+            // Create a convex shape for the vessel (rectangle with rounded ends)
+            sf::ConvexShape vesselShape;
+            vesselShape.setPointCount(4);
+            
+            // Normal vector (perpendicular to vessel direction)
+            float nx = -dy / length;
+            float ny = dx / length;
+            
+            // Set the points of the rectangle
+            vesselShape.setPoint(0, sf::Vector2f(vessel.start_x + nx * vessel.radius, vessel.start_y + ny * vessel.radius));
+            vesselShape.setPoint(1, sf::Vector2f(vessel.start_x - nx * vessel.radius, vessel.start_y - ny * vessel.radius));
+            vesselShape.setPoint(2, sf::Vector2f(vessel.end_x - nx * vessel.radius, vessel.end_y - ny * vessel.radius));
+            vesselShape.setPoint(3, sf::Vector2f(vessel.end_x + nx * vessel.radius, vessel.end_y + ny * vessel.radius));
+            
+            // Set vessel color (dark red for blood vessels)
+            sf::Color vesselColor(120, 0, 0);
+            vesselShape.setFillColor(vesselColor);
+            
+            // Draw the vessel
+            renderTexture.draw(vesselShape);
+            
+            // Draw rounded caps at both ends of the vessel
+            sf::CircleShape startCap(vessel.radius);
+            startCap.setPosition(sf::Vector2f(vessel.start_x - vessel.radius, vessel.start_y - vessel.radius));
+            startCap.setFillColor(vesselColor);
+            renderTexture.draw(startCap);
+            
+            sf::CircleShape endCap(vessel.radius);
+            endCap.setPosition(sf::Vector2f(vessel.end_x - vessel.radius, vessel.end_y - vessel.radius));
+            endCap.setFillColor(vesselColor);
+            renderTexture.draw(endCap);
+        }
+        
+        // Draw cells over the vessels
         for (const auto& cell : cells) {
             if (cell.active) {
-                // Create a circle shape for each cell
-                sf::CircleShape cellShape(cell.radius);
-                cellShape.setOrigin(sf::Vector2f(cell.radius, cell.radius));
+                size_t pointCount = 30;
+                sf::CircleShape cellShape(cell.radius, pointCount);
+                // cellShape.setOrigin(sf::Vector2f(cell.radius, cell.radius));
                 cellShape.setPosition(sf::Vector2f(cell.x, cell.y));
                 
                 const auto& color = CELL_COLORS.at(cell.type);
