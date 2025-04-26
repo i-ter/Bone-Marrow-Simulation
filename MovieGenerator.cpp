@@ -159,6 +159,9 @@ void MovieGenerator::generateFrames() {
             float dy = vessel.end_y - vessel.start_y;
             float length = sqrt(dx * dx + dy * dy);
             
+            // Apply scaling factor for blood vessels (10x bigger)
+            float scaledRadius = vessel.radius;
+            
             // Create a convex shape for the vessel (rectangle with rounded ends)
             sf::ConvexShape vesselShape;
             vesselShape.setPointCount(4);
@@ -167,11 +170,11 @@ void MovieGenerator::generateFrames() {
             float nx = -dy / length;
             float ny = dx / length;
             
-            // Set the points of the rectangle
-            vesselShape.setPoint(0, sf::Vector2f(vessel.start_x + nx * vessel.radius, vessel.start_y + ny * vessel.radius));
-            vesselShape.setPoint(1, sf::Vector2f(vessel.start_x - nx * vessel.radius, vessel.start_y - ny * vessel.radius));
-            vesselShape.setPoint(2, sf::Vector2f(vessel.end_x - nx * vessel.radius, vessel.end_y - ny * vessel.radius));
-            vesselShape.setPoint(3, sf::Vector2f(vessel.end_x + nx * vessel.radius, vessel.end_y + ny * vessel.radius));
+            // Set the points of the rectangle using the scaled radius
+            vesselShape.setPoint(0, sf::Vector2f(vessel.start_x + nx * scaledRadius, vessel.start_y + ny * scaledRadius));
+            vesselShape.setPoint(1, sf::Vector2f(vessel.start_x - nx * scaledRadius, vessel.start_y - ny * scaledRadius));
+            vesselShape.setPoint(2, sf::Vector2f(vessel.end_x - nx * scaledRadius, vessel.end_y - ny * scaledRadius));
+            vesselShape.setPoint(3, sf::Vector2f(vessel.end_x + nx * scaledRadius, vessel.end_y + ny * scaledRadius));
             
             // Set vessel color (dark red for blood vessels)
             sf::Color vesselColor(120, 0, 0);
@@ -180,14 +183,14 @@ void MovieGenerator::generateFrames() {
             // Draw the vessel
             renderTexture.draw(vesselShape);
             
-            // Draw rounded caps at both ends of the vessel
-            sf::CircleShape startCap(vessel.radius);
-            startCap.setPosition(sf::Vector2f(vessel.start_x - vessel.radius, vessel.start_y - vessel.radius));
+            // Draw rounded caps at both ends of the vessel with scaled radius
+            sf::CircleShape startCap(scaledRadius);
+            startCap.setPosition(sf::Vector2f(vessel.start_x - scaledRadius, vessel.start_y - scaledRadius));
             startCap.setFillColor(vesselColor);
             renderTexture.draw(startCap);
             
-            sf::CircleShape endCap(vessel.radius);
-            endCap.setPosition(sf::Vector2f(vessel.end_x - vessel.radius, vessel.end_y - vessel.radius));
+            sf::CircleShape endCap(scaledRadius);
+            endCap.setPosition(sf::Vector2f(vessel.end_x - scaledRadius, vessel.end_y - scaledRadius));
             endCap.setFillColor(vesselColor);
             renderTexture.draw(endCap);
         }

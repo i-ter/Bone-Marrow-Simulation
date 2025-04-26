@@ -1,5 +1,7 @@
 #include "MovieGenerator.h"
 #include <iostream>
+#include <fstream>
+#include <string>
 
 int main(int argc, char* argv[]) {
     try {
@@ -12,9 +14,27 @@ int main(int argc, char* argv[]) {
         }
         
         std::cout << "Generating movie for simulation: " << simName << std::endl;
-        
+
+        std::string paramsFilename = "data/" + simName + "_params.csv";
+        std::ifstream paramsFile(paramsFilename);
+        if (!paramsFile.is_open()) {
+            throw std::runtime_error("Failed to open parameters file: " + paramsFilename);
+        }
+
+        int width, height;
+        std::string line;
+        while (std::getline(paramsFile, line)) {
+            if (line.find("width") != std::string::npos) {
+                width = std::stoi(line.substr(line.find(",") + 1));
+            }
+            if (line.find("height") != std::string::npos) {
+                height = std::stoi(line.substr(line.find(",") + 1));
+            }
+        }
+        paramsFile.close();
+
         // Create a movie generator with the same dimensions as the simulation
-        MovieGenerator movieGen(1500, 1000);
+        MovieGenerator movieGen(width, height);
         
         // Generate the movie with 30 fps
         movieGen.generateMovie(simName, 30);

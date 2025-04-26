@@ -85,9 +85,9 @@ inline const std::map<CellType, float> LEAVE_PROB = {
     {CLP, 0.0f},
     {MEP, 0.0f},
     {GMP, 0.0f},
-    {Granulocyte, 0.05f},
-    {Erythrocyte, 0.05f},
-    {Lymphocyte, 0.05f}
+    {Granulocyte, 0.1f},
+    {Erythrocyte, 0.1f},
+    {Lymphocyte, 0.1f}
 };
 
 // Map for cell death probabilities
@@ -100,9 +100,9 @@ inline const std::map<CellType, float> CELL_DEATH_PROB = {
     {CLP, 0.01f},
     {MEP, 0.01f},
     {GMP, 0.01f},
-    {Granulocyte, 0.05f},
-    {Erythrocyte, 0.05f},
-    {Lymphocyte, 0.05f}
+    {Granulocyte, 0.01f},
+    {Erythrocyte, 0.01f},
+    {Lymphocyte, 0.01f}
 };
 
 // Map for cell motility

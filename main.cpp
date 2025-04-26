@@ -22,8 +22,8 @@ mt19937 gen(rd());
 uniform_real_distribution<> unif_01(0, 1);
 uniform_real_distribution<float> angle_dist(0, 2 * M_PI);
 uniform_real_distribution<float> angle_change(-0.5, 0.5);
-uniform_real_distribution<float> vessel_length_dist(100.0, 400.0);  // Blood vessel length distribution
-uniform_real_distribution<float> vessel_radius_dist(15.0, 20.0);    // Blood vessel radius distribution
+// uniform_real_distribution<float> vessel_length_dist(100, 600);  // Blood vessel length distribution
+// uniform_real_distribution<float> vessel_radius_dist(20.0, 50);    // Blood vessel radius distribution
 
 
 class BloodVessel
@@ -414,6 +414,7 @@ public:
     string dataDir = "data";  // Directory for cell data files
     ofstream consolidatedDataFile;  // File stream for consolidated data
     ofstream vesselDataFile;  // File for blood vessel data
+    ofstream paramsFile;      // File for simulation parameters
     
     // Statistics tracking
     struct Stats {
@@ -480,8 +481,8 @@ public:
     BloodVessel generateRandomVessel() {
         float start_x = unif_01(gen) * width;
         float start_y = unif_01(gen) * height;
-        float length = vessel_length_dist(gen);
-        float radius = vessel_radius_dist(gen);
+        float length = 100 + unif_01(gen) * 500;
+        float radius = 20 + unif_01(gen) * 30;
         float angle = angle_dist(gen);
         
         return BloodVessel(start_x, start_y, length, radius, angle);
@@ -499,11 +500,11 @@ public:
         }
         
         // Check intersection with other vessels
-        for (const auto& existing_vessel : blood_vessels) {
-            if (vessel.intersectsWith(existing_vessel)) {
-                return false;
-            }
-        }
+        // for (const auto& existing_vessel : blood_vessels) {
+        //     if (vessel.intersectsWith(existing_vessel)) {
+        //         return false;
+        //     }
+        // }
         
         return true;
     }
@@ -550,6 +551,40 @@ public:
         {
             fs::create_directory(dataDir);
         }
+        
+        // Save simulation parameters in CSV format
+        string paramsFilename = dataDir + "/" + sim_name + "_params.csv";
+        paramsFile.open(paramsFilename);
+        
+        // Write global parameters
+        paramsFile << "parameter,value" << endl
+                  << "width," << width << endl
+                  << "height," << height << endl
+                  << "initial_cells," << initial_cells << endl
+                  << "num_vessels," << num_vessels << endl
+                  << "spatial_grid_block_size," << 12.0 << endl
+                  << "max_speed," << MAX_SPEED << endl
+                  << "vessel_distance_threshold," << VESSEL_DISTANCE_THRESHOLD << endl
+                  << "vessel_leaving_multiplier," << VESSEL_LEAVING_MULTIPLIER << endl;
+        paramsFile.close();
+        
+        // Save cell type specific parameters in a separate CSV
+        string cellParamsFilename = dataDir + "/" + sim_name + "_cell_params.csv";
+        paramsFile.open(cellParamsFilename);
+        
+        // Write header
+        paramsFile << "cell_type,radius,division_probability,death_probability,leave_probability,motility" << endl;
+        
+        // Write cell type specific parameters
+        for (const auto& [type, radius] : CELL_RADII) {
+            paramsFile << getCellTypeName(type) << ","
+                      << radius << ","
+                      << DIVISION_PROB.at(type) << ","
+                      << CELL_DEATH_PROB.at(type) << ","
+                      << LEAVE_PROB.at(type) << ","
+                      << MOTILITY.at(type) << endl;
+        }
+        paramsFile.close();
         
         // Initialize consolidated data file
         string consolidatedFilename = dataDir + "/" + sim_name + "_all_steps.csv";
