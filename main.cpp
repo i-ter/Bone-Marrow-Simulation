@@ -20,7 +20,7 @@ std::random_device rd;
 std::mt19937 gen(rd());
 std::uniform_real_distribution<> unif_01(0, 1);
 std::uniform_real_distribution<float> angle_dist(0, 2 * M_PI);
-std::uniform_real_distribution<float> angle_change(-0.5, 0.5);
+// std::uniform_real_distribution<float> angle_change(-0.5, 0.5);
 std::normal_distribution<float> normal_dist(0, 1);
 // uniform_real_distribution<float> vessel_length_dist(100, 600);  // Blood vessel length distribution
 // uniform_real_distribution<float> vessel_radius_dist(20.0, 50);    // Blood vessel radius distribution
@@ -188,8 +188,15 @@ public:
     bool is_dead = false;
     bool is_leaving = false;
     bool in_vessel_neighbourhood = false;  // Flag to track if cell is currently inside a blood vessel
-    
-    Cell(float x, float y, float radius, CellType type) : cell_type(type), x(x), y(y), radius(radius) {}
+    int clone_id;
+
+    void updateType(CellType type) {
+        cell_type = type;
+        radius = CELL_RADII.at(type);
+    }
+
+    Cell(float x, float y, float radius, CellType type, int clone_id) 
+    : cell_type(type), x(x), y(y), radius(radius), clone_id(clone_id) {}
 
     ~Cell() {}
 
@@ -242,60 +249,6 @@ public:
         return vessel.distanceFrom(x, y) <= distance_threshold;
     }
     
-    // Handle collision with a blood vessel
-    void resolveVesselCollision(const BloodVessel& vessel) {
-        throw std::runtime_error("resolveVesselCollision never called");
-        // Calculate the closest point on the vessel centerline
-        float v1x = x - vessel.start_x;
-        float v1y = y - vessel.start_y;
-        float v2x = vessel.end_x - vessel.start_x;
-        float v2y = vessel.end_y - vessel.start_y;
-        float vessel_length_squared = v2x * v2x + v2y * v2y;
-        float dot_product = v1x * v2x + v1y * v2y;
-        float projection_ratio = max(0.0f, min(1.0f, dot_product / vessel_length_squared));
-        
-        float closest_x = vessel.start_x + projection_ratio * v2x;
-        float closest_y = vessel.start_y + projection_ratio * v2y;
-        
-        // Calculate distance and normal vector from cell to vessel
-        float dx = x - closest_x;
-        float dy = y - closest_y;
-        float distance = sqrt(dx * dx + dy * dy);
-        
-        // Normalize normal vector
-        float nx = dx / distance;
-        float ny = dy / distance;
-        
-        // Calculate penetration depth
-        float penetration = radius - distance;
-        
-        if (distance < 0.1) {
-            // Generate random normal if too close to centerline
-            float angle = angle_dist(gen);
-            nx = cos(angle);
-            ny = sin(angle);
-            distance = 0.1;
-        }
-        
-        if (penetration > 0) {
-            // Move cell out of the vessel wall if it's penetrating
-            if (!in_vessel_neighbourhood) {
-                x += nx * penetration;
-                y += ny * penetration;
-            }
-            
-            // Reflect velocity along the normal direction
-            float dot = dx * nx + dy * ny;
-            dx -= 2 * dot * nx;
-            dy -= 2 * dot * ny;
-            
-            // Add some randomization to the bounce
-            float speed = sqrt(dx * dx + dy * dy);
-            float angle = atan2(dy, dx) + (unif_01(gen) - 0.5) * 0.2;
-            dx = cos(angle) * speed;
-            dy = sin(angle) * speed;
-        }
-    }
     
     void resolveCollision(Cell& other) {
         // Calculate displacement vector
@@ -461,6 +414,75 @@ public:
     
     SpatialGrid spatial_grid;
 
+    // init
+    BoneMarrow(float width, float height, int initial_cells, string sim_name="bm", int num_vessels=3) 
+        : width(width), height(height), num_vessels(num_vessels), sim_name(sim_name), spatial_grid(width, height, 12.)
+    {
+        if (!fs::exists(dataDir))
+        {
+            fs::create_directory(dataDir);
+        }
+        
+        // Save simulation parameters in CSV format
+        string paramsFilename = dataDir + "/" + sim_name + "_params.csv";
+        paramsFile.open(paramsFilename);
+        
+        // Write global parameters
+        paramsFile << "parameter,value" << endl
+                  << "width," << width << endl
+                  << "height," << height << endl
+                  << "initial_cells," << initial_cells << endl
+                  << "num_vessels," << num_vessels << endl
+                  << "spatial_grid_block_size," << 12.0 << endl
+                  << "max_speed," << MAX_SPEED << endl
+                  << "vessel_distance_threshold," << VESSEL_DISTANCE_THRESHOLD << endl
+                  << "vessel_leaving_multiplier," << VESSEL_LEAVING_MULTIPLIER << endl;
+        paramsFile.close();
+        
+        // Save cell type specific parameters in a separate CSV
+        string cellParamsFilename = dataDir + "/" + sim_name + "_cell_params.csv";
+        paramsFile.open(cellParamsFilename);
+        
+        // Write header
+        paramsFile << "cell_type,radius,division_probability,death_probability,leave_probability,motility" << endl;
+        
+        // Write cell type specific parameters
+        for (const auto& [type, radius] : CELL_RADII) {
+            paramsFile << getCellTypeName(type) << ","
+                      << radius << ","
+                      << DIVISION_PROB.at(type) << ","
+                      << CELL_DEATH_PROB.at(type) << ","
+                      << LEAVE_PROB.at(type) << ","
+                      << MOTILITY.at(type) << endl;
+        }
+        paramsFile.close();
+        
+        // Initialize consolidated data file
+        string consolidatedFilename = dataDir + "/" + sim_name + "_all_steps.csv";
+        consolidatedDataFile.open(consolidatedFilename);
+        consolidatedDataFile << "step,cell_type,x,y,dx,dy,clone_id,vessel_neighbourhood,status" << endl;
+        
+        for (int i = 0; i < initial_cells; ++i)
+        {
+            float x = static_cast<float>(unif_01(gen) * width);
+            float y = static_cast<float>(unif_01(gen) * height);
+            cells.push_back(make_unique<Cell>(x, y, CELL_RADII.at(HSC), HSC, i));
+        }
+        
+        float totalArea = width*height;
+        float nStromaCells = totalArea/10000 * CXCL_DENSITY_PER_100_AREA;
+        
+        for (int i = 0; i < nStromaCells; ++i) {
+            float x = static_cast<float>(unif_01(gen) * width);
+            float y = static_cast<float>(unif_01(gen) * height);
+            cells.push_back(make_unique<Cell>(x, y, CELL_RADII.at(STROMAL), STROMAL, -1));
+        }
+
+        cout << "Generated " << nStromaCells << " stromal cells" << endl;
+
+        // generateBloodVessels(num_vessels);
+    }
+
     // Generate a random blood vessel
     BloodVessel generateRandomVessel() {
         float start_x = unif_01(gen) * width;
@@ -520,63 +542,7 @@ public:
              << num_vessels << " requested (after " << attempts << " attempts)" << endl;
     }
 
-    // init
-    BoneMarrow(float width, float height, int initial_cells, string sim_name="bm", int num_vessels=3) 
-        : width(width), height(height), num_vessels(num_vessels), sim_name(sim_name), spatial_grid(width, height, 12.)
-    {
-        if (!fs::exists(dataDir))
-        {
-            fs::create_directory(dataDir);
-        }
-        
-        // Save simulation parameters in CSV format
-        string paramsFilename = dataDir + "/" + sim_name + "_params.csv";
-        paramsFile.open(paramsFilename);
-        
-        // Write global parameters
-        paramsFile << "parameter,value" << endl
-                  << "width," << width << endl
-                  << "height," << height << endl
-                  << "initial_cells," << initial_cells << endl
-                  << "num_vessels," << num_vessels << endl
-                  << "spatial_grid_block_size," << 12.0 << endl
-                  << "max_speed," << MAX_SPEED << endl
-                  << "vessel_distance_threshold," << VESSEL_DISTANCE_THRESHOLD << endl
-                  << "vessel_leaving_multiplier," << VESSEL_LEAVING_MULTIPLIER << endl;
-        paramsFile.close();
-        
-        // Save cell type specific parameters in a separate CSV
-        string cellParamsFilename = dataDir + "/" + sim_name + "_cell_params.csv";
-        paramsFile.open(cellParamsFilename);
-        
-        // Write header
-        paramsFile << "cell_type,radius,division_probability,death_probability,leave_probability,motility" << endl;
-        
-        // Write cell type specific parameters
-        for (const auto& [type, radius] : CELL_RADII) {
-            paramsFile << getCellTypeName(type) << ","
-                      << radius << ","
-                      << DIVISION_PROB.at(type) << ","
-                      << CELL_DEATH_PROB.at(type) << ","
-                      << LEAVE_PROB.at(type) << ","
-                      << MOTILITY.at(type) << endl;
-        }
-        paramsFile.close();
-        
-        // Initialize consolidated data file
-        string consolidatedFilename = dataDir + "/" + sim_name + "_all_steps.csv";
-        consolidatedDataFile.open(consolidatedFilename);
-        consolidatedDataFile << "step,cell_type,x,y,dx,dy,status" << endl;
-        
-        for (int i = 0; i < initial_cells; ++i)
-        {
-            float x = static_cast<float>(unif_01(gen) * width);
-            float y = static_cast<float>(unif_01(gen) * height);
-            cells.push_back(make_unique<Cell>(x, y, CELL_RADII.at(HSC), HSC));
-        }
-        cout<< "Removed blood vessels" << endl;
-        // generateBloodVessels(num_vessels);
-    }
+    
     ~BoneMarrow() {
         // destructor to close the consolidated data file
         consolidatedDataFile.close();
@@ -625,18 +591,20 @@ public:
                 if (cell->is_dead && cell->is_leaving ) {throw runtime_error("Cell is dead or leaving. something is wrong.");}
                 
                 auto& possible_types = LINEAGE_TREE.at(cell->getType());
-                CellType new_type = possible_types[rand() % possible_types.size()];
+                CellType new_type = possible_types[std::rand() % possible_types.size()];
                 
                 float offset = cell->radius;
                 float new_x = cell->x + (unif_01(gen) * 2. - 1.) * offset;
                 float new_y = cell->y + (unif_01(gen) * 2. - 1.) * offset;
                 
-                new_cells.push_back(make_unique<Cell>(new_x, new_y, CELL_RADII.at(new_type), new_type));
-
-                cell->setVelocity(0, 0);
+                // set velocity to 0
+                new_cells.push_back(make_unique<Cell>(new_x, new_y, CELL_RADII.at(new_type), new_type, cell->clone_id));
+                if (cell->getType() != HSC) {
+                    cell->updateType(new_type);
+                }
             }
         }
-        
+
         // 5. Check for cell death and leaving
         for (auto& cell : cells) {
             CellType cellType = cell->getType();
@@ -683,6 +651,7 @@ public:
                      << fixed << setprecision(4) << cell->y << ","
                      << fixed << setprecision(4) << cell->dx << ","
                      << fixed << setprecision(4) << cell->dy << ","
+                     << cell->clone_id << ","
                      << cell->in_vessel_neighbourhood << ","
                      << status << endl;
         }
