@@ -352,7 +352,8 @@ public:
     ofstream consolidatedDataFile;  // File stream for consolidated data
     ofstream vesselDataFile;  // File for blood vessel data
     ofstream paramsFile;      // File for simulation parameters
-    
+    bool cold_start;
+
     // Statistics tracking
     struct Stats {
         int total_deaths = 0;
@@ -415,8 +416,13 @@ public:
     SpatialGrid spatial_grid;
 
     // init
-    BoneMarrow(float width, float height, int initial_cells, string sim_name="bm", int num_vessels=3) 
-        : width(width), height(height), num_vessels(num_vessels), sim_name(sim_name), spatial_grid(width, height, 12.)
+    BoneMarrow(float width, float height, int initial_cells, string sim_name="bm", int num_vessels=3, bool cold_start=false) 
+        : width(width), 
+          height(height), 
+          num_vessels(num_vessels), 
+          sim_name(sim_name), 
+          spatial_grid(width, height, 12.), 
+          cold_start(cold_start)
     {
         if (!fs::exists(dataDir))
         {
@@ -444,7 +450,7 @@ public:
         paramsFile.open(cellParamsFilename);
         
         // Write header
-        paramsFile << "cell_type,radius,division_probability,death_probability,leave_probability,motility" << endl;
+        paramsFile << "cell_type,radius,division_probability,death_probability,leave_probability,motility,initial_number" << endl;
         
         // Write cell type specific parameters
         for (const auto& [type, radius] : CELL_RADII) {
@@ -453,7 +459,8 @@ public:
                       << DIVISION_PROB.at(type) << ","
                       << CELL_DEATH_PROB.at(type) << ","
                       << LEAVE_PROB.at(type) << ","
-                      << MOTILITY.at(type) << endl;
+                      << MOTILITY.at(type) << ","
+                      << INITIAL_CELL_NUMBERS.at(type) << endl;
         }
         paramsFile.close();
         
@@ -462,11 +469,20 @@ public:
         consolidatedDataFile.open(consolidatedFilename);
         consolidatedDataFile << "step,cell_type,x,y,dx,dy,clone_id,vessel_neighbourhood,status" << endl;
         
-        for (int i = 0; i < initial_cells; ++i)
-        {
-            float x = static_cast<float>(unif_01(gen) * width);
-            float y = static_cast<float>(unif_01(gen) * height);
-            cells.push_back(make_unique<Cell>(x, y, CELL_RADII.at(HSC), HSC, i));
+        if (cold_start) {
+            for (int i = 0; i < initial_cells; ++i){
+                float x = static_cast<float>(unif_01(gen) * width);
+                float y = static_cast<float>(unif_01(gen) * height);
+                cells.push_back(make_unique<Cell>(x, y, CELL_RADII.at(HSC), HSC, i));
+            }
+        } else {
+            for (const auto& [type, num] : INITIAL_CELL_NUMBERS) {
+                for (int i = 0; i < num; ++i) {
+                    float x = static_cast<float>(unif_01(gen) * width);
+                    float y = static_cast<float>(unif_01(gen) * height);
+                    cells.push_back(make_unique<Cell>(x, y, CELL_RADII.at(type), type, i));
+                }
+            }
         }
         
         float totalArea = width*height;
@@ -480,7 +496,7 @@ public:
 
         cout << "Generated " << nStromaCells << " stromal cells" << endl;
 
-        // generateBloodVessels(num_vessels);
+        generateBloodVessels(num_vessels);
     }
 
     // Generate a random blood vessel
@@ -491,6 +507,16 @@ public:
         float radius = 20 + unif_01(gen) * 30;
         float angle = angle_dist(gen);
         
+        return BloodVessel(start_x, start_y, length, radius, angle);
+    }
+
+    BloodVessel generateFixedVessel() {
+        float start_x = width/4;
+        float start_y = height/2;
+        float length = width/2;
+        float radius = 20;
+        float angle = 0;
+
         return BloodVessel(start_x, start_y, length, radius, angle);
     }
     
@@ -512,15 +538,17 @@ public:
     void generateBloodVessels(int num_vessels) {
         int max_attempts = num_vessels * 10; // Maximum generation attempts
         int attempts = 0;
+
         
-        while (blood_vessels.size() < static_cast<size_t>(num_vessels) && attempts < max_attempts) {
-            BloodVessel vessel = generateRandomVessel();
-            if (isVesselValid(vessel)) {
-                blood_vessels.push_back(vessel);
-            }
-            attempts++;
-        }
-        
+        // while (blood_vessels.size() < static_cast<size_t>(num_vessels) && attempts < max_attempts) {
+        //     BloodVessel vessel = generateRandomVessel();
+        //     if (isVesselValid(vessel)) {
+        //         blood_vessels.push_back(vessel);
+        //     }
+        //     attempts++;
+        // }
+
+        blood_vessels.push_back(generateFixedVessel());
         // Write vessel data to file
         string vesselFilename = dataDir + "/" + sim_name + "_vessels.csv";
         vesselDataFile.open(vesselFilename);
@@ -714,7 +742,8 @@ int main(int argc, char* argv[])
     int steps = 200;
     string sim_name = "bm_sim";
     int num_vessels = 10;  // Default number of blood vessels
-    
+    bool cold_start = false;
+
     // Parse command-line arguments
     if (argc > 1) {
         for (int i = 1; i < argc; i++) {
@@ -731,6 +760,10 @@ int main(int argc, char* argv[])
                 sim_name = argv[++i];
             } else if ((arg == "--vessels" || arg == "-v") && i + 1 < argc) {
                 num_vessels = stoi(argv[++i]);
+            } else if ((arg == "cold_start" || arg == "cs") && i + 1 < argc) {
+                string cold_start_str = argv[++i];
+                transform(cold_start_str.begin(), cold_start_str.end(), cold_start_str.begin(), ::tolower);
+                cold_start = (cold_start_str == "true" || cold_start_str == "1" || cold_start_str == "yes" || cold_start_str == "y");
             } else if (arg == "--help") {
                 cout << "Bone Marrow Simulation\n"
                      << "Usage: " << argv[0] << " [options]\n"
@@ -741,7 +774,8 @@ int main(int argc, char* argv[])
                      << "  --steps NUM        Set simulation steps (default: 200)\n"
                      << "  --name NAME        Set simulation name (default: bm_sim)\n"
                      << "  --vessels NUM      Set number of blood vessels (default: 10)\n"
-                     << "  --help             Display this help message\n";
+                     << "  --help             Display this help message\n"
+                     << "  --cold_start       Cold start the simulation (default: false)\n";
                 return 0;
             }
         }
@@ -755,8 +789,9 @@ int main(int argc, char* argv[])
     cout << "  Blood vessels: " << num_vessels << "\n";
     cout << "  Steps: " << steps << "\n";
     cout << "  Simulation name: " << sim_name << "\n\n";
+    cout << "  Cold start: " << cold_start << "\n\n";
     
-    BoneMarrow model(width, height, initial_cells, sim_name, num_vessels);
+    BoneMarrow model(width, height, initial_cells, sim_name, num_vessels, cold_start);
     model.run(steps);
     
     cout << "Simulation completed.\n";

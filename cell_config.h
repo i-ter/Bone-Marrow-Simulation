@@ -163,4 +163,21 @@ inline const std::map<CellType, std::tuple<int, int, int>> CELL_COLORS = {
 };
 
 
+inline const std::map<CellType, float> INITIAL_CELL_NUMBERS = {
+    {HSC, 1},
+    {MPP1, 5},
+    {MPP2, 50},
+    {MPP3, 100},
+    {CMP, 100},
+    {CLP, 100},
+    {MEP, 100},
+    {GMP, 200},
+    {Granulocyte, 2000},
+    {Erythrocyte, 2000},
+    {Lymphocyte, 1000},
+    {STROMAL, -1}
+};
+
+
+
 #endif

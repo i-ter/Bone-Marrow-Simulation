@@ -167,7 +167,7 @@ void MovieGenerator::generateFrames() {
             float dy = vessel.end_y - vessel.start_y;
             float length = sqrt(dx * dx + dy * dy);
             
-            // Apply scaling factor for blood vessels (10x bigger)
+            // Apply scaling factor for blood vessels
             float scaledRadius = vessel.radius;
             
             // Create a convex shape for the vessel (rectangle with rounded ends)
