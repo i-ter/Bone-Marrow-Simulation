@@ -32,6 +32,7 @@ int main(int argc, char* argv[]) {
             }
         }
         paramsFile.close();
+        std::cout << "width: " << width << " height: " << height << std::endl;
 
         // Create a movie generator with the same dimensions as the simulation
         MovieGenerator movieGen(width, height);
