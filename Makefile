@@ -12,7 +12,7 @@ MOVIE_GEN = gen_movie_main
 
 # Source Files
 SRCS = main.cpp
-MOVIE_SRCS = gen_movie_main.cpp MovieGenerator.cpp
+MOVIE_SRCS = gen_movie_main.cpp movie_generator.cpp
 
 # Build all targets
 all: $(SIM) $(MOVIE_GEN)

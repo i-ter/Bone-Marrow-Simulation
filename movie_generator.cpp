@@ -1,4 +1,4 @@
-#include "MovieGenerator.h"
+#include "movie_generator.h"
 
 MovieGenerator::MovieGenerator(int width, int height) 
     : width(width), height(height), framesDir("frames"), dataDir("data"), videoDir("movies") {
