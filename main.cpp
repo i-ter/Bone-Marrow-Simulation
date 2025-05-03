@@ -16,12 +16,12 @@ using namespace std;
 namespace fs = std::filesystem;
 
 
-// Random number generator
-random_device rd;
-mt19937 gen(rd());
-uniform_real_distribution<> unif_01(0, 1);
-uniform_real_distribution<float> angle_dist(0, 2 * M_PI);
-uniform_real_distribution<float> angle_change(-0.5, 0.5);
+std::random_device rd;
+std::mt19937 gen(rd());
+std::uniform_real_distribution<> unif_01(0, 1);
+std::uniform_real_distribution<float> angle_dist(0, 2 * M_PI);
+std::uniform_real_distribution<float> angle_change(-0.5, 0.5);
+std::normal_distribution<float> normal_dist(0, 1);
 // uniform_real_distribution<float> vessel_length_dist(100, 600);  // Blood vessel length distribution
 // uniform_real_distribution<float> vessel_radius_dist(20.0, 50);    // Blood vessel radius distribution
 
@@ -189,13 +189,7 @@ public:
     bool is_leaving = false;
     bool in_vessel_neighbourhood = false;  // Flag to track if cell is currently inside a blood vessel
     
-    Cell(float x, float y, float radius, CellType type) : cell_type(type), x(x), y(y), radius(radius) {
-        // Initialize random movement direction
-        float angle = angle_dist(gen);
-        float speed = unif_01(gen) * MOTILITY.at(cell_type); // Adjust speed by motility
-        dx = cos(angle) * speed;
-        dy = sin(angle) * speed;
-    }
+    Cell(float x, float y, float radius, CellType type) : cell_type(type), x(x), y(y), radius(radius) {}
 
     ~Cell() {}
 
@@ -204,28 +198,17 @@ public:
     }
 
     void move(const float& width, const float& height) {
-        // If cell is not moving, randomly change direction
-        if (dx == 0 && dy == 0) {
-            if (unif_01(gen) < 0.3) {
-                float angle = angle_dist(gen);
-                float speed = unif_01(gen) * MOTILITY.at(cell_type); // Adjust speed by motility
-                dx = cos(angle) * speed;
-                dy = sin(angle) * speed;
-            }
-        }
-
+        // Define diffusion coefficient
+        float dt = 1.0; // Define a time step, can be adjusted
+        float D = MOTILITY.at(cell_type);
+        // Update position with spatial diffusion
+        
+        dx = D * sqrt(dt) * normal_dist(gen);   
+        dy = D * sqrt(dt) * normal_dist(gen);
         x += dx;
         y += dy;
-        
+
         handleBoundaryCollision(width, height);
-        
-        if (unif_01(gen) < 0.2) {  // 10% chance to change direction each step
-            float angle = atan2(dy, dx);
-            angle += angle_change(gen);
-            float speed = sqrt(dx*dx + dy*dy);
-            dx = cos(angle) * speed;
-            dy = sin(angle) * speed;
-        }
     }
 
     void handleBoundaryCollision(const float& width, const float& height) {
@@ -261,6 +244,7 @@ public:
     
     // Handle collision with a blood vessel
     void resolveVesselCollision(const BloodVessel& vessel) {
+        throw std::runtime_error("resolveVesselCollision never called");
         // Calculate the closest point on the vessel centerline
         float v1x = x - vessel.start_x;
         float v1y = y - vessel.start_y;
@@ -499,13 +483,6 @@ public:
             return false;
         }
         
-        // Check intersection with other vessels
-        // for (const auto& existing_vessel : blood_vessels) {
-        //     if (vessel.intersectsWith(existing_vessel)) {
-        //         return false;
-        //     }
-        // }
-        
         return true;
     }
     
@@ -597,8 +574,8 @@ public:
             float y = static_cast<float>(unif_01(gen) * height);
             cells.push_back(make_unique<Cell>(x, y, CELL_RADII.at(HSC), HSC));
         }
-
-        generateBloodVessels(num_vessels);
+        cout<< "Removed blood vessels" << endl;
+        // generateBloodVessels(num_vessels);
     }
     ~BoneMarrow() {
         // destructor to close the consolidated data file
