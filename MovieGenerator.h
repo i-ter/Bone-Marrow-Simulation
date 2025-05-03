@@ -30,6 +30,8 @@ private:
         float x, y;
         float radius;
         bool active;
+        int clone_id;
+        bool vessel_neighbourhood;
     };
     
     // Vessel data structure for reading from CSV

@@ -125,6 +125,14 @@ void MovieGenerator::readCellDataFromFile(const std::string& filename) {
         // Skip dx and dy
         std::getline(ss, token, ',');  // dx
         std::getline(ss, token, ',');  // dy
+
+        // parse clone_id
+        std::getline(ss, token, ',');
+        cell.clone_id = std::stoi(token);
+
+        // parse vessel_neighbourhood
+        std::getline(ss, token, ',');
+        cell.vessel_neighbourhood = std::stoi(token);
         
         // Parse status
         std::getline(ss, token, ',');

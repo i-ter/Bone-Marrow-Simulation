@@ -18,7 +18,7 @@ MOVIE_SRCS = gen_movie_main.cpp MovieGenerator.cpp
 all: $(SIM) $(MOVIE_GEN)
 
 # Main simulation target
-$(SIM): $(SRCS)
+$(SIM): $(SRCS) cell_config.h
 	$(CXX) $(CXXFLAGS) $(SRCS) -o $(SIM) $(LDFLAGS)
 
 # Movie generator target
