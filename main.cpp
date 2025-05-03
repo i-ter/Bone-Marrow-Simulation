@@ -470,12 +470,15 @@ public:
         consolidatedDataFile << "step,cell_type,x,y,dx,dy,clone_id,vessel_neighbourhood,status" << endl;
         
         if (cold_start) {
+            cout<< "COLD STARTING THE SIMULATION" << endl;
             for (int i = 0; i < initial_cells; ++i){
                 float x = static_cast<float>(unif_01(gen) * width);
                 float y = static_cast<float>(unif_01(gen) * height);
                 cells.push_back(make_unique<Cell>(x, y, CELL_RADII.at(HSC), HSC, i));
             }
         } else {
+            cout<< "WARM STARTING THE SIMULATION" << endl;
+
             for (const auto& [type, num] : INITIAL_CELL_NUMBERS) {
                 for (int i = 0; i < num; ++i) {
                     float x = static_cast<float>(unif_01(gen) * width);
@@ -574,6 +577,8 @@ public:
     ~BoneMarrow() {
         // destructor to close the consolidated data file
         consolidatedDataFile.close();
+        vesselDataFile.close();
+        paramsFile.close();
     }
 
     void step()

@@ -8,7 +8,7 @@
 
 constexpr float MAX_SPEED = 1.0f;
 constexpr float VESSEL_DISTANCE_THRESHOLD = 20.0f;
-constexpr float VESSEL_LEAVING_MULTIPLIER = 5.0f;
+constexpr float VESSEL_LEAVING_MULTIPLIER = 10.0f;
 constexpr float CXCL_DENSITY_PER_100_AREA = 6.0f;
 
 enum CellType {
@@ -83,7 +83,7 @@ inline const std::map<CellType, float> DIVISION_PROB = {
 };
 
 // Map for cell leaving probabilities
-constexpr float FINAL_LEAVING_PROB = 0.05f;
+constexpr float FINAL_LEAVING_PROB = 0.001f;
 
 inline const std::map<CellType, float> LEAVE_PROB = {
     {HSC, 0.0f},
