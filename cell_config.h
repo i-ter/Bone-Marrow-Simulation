@@ -5,6 +5,8 @@
 #include <map>
 #include <cmath>
 #include <tuple>
+#include "magic_enum.hpp"
+#include <iostream>
 
 constexpr float MAX_SPEED = 1.0f;
 constexpr float VESSEL_DISTANCE_THRESHOLD = 20.0f;
@@ -16,38 +18,84 @@ enum CellType {
     MPP1,
     MPP2,
     MPP3,
+    MPP4, 
+    MPP5,
     CMP, // RPP1
     CLP, // RRP1
     MEP, // RPP2
     GMP, // RRP2
-    Erythrocyte,
-    Granulocyte,
-    Lymphocyte, 
-    STROMAL,
+    Erythroblast1,
+    Erythroblast2,
+    Erythroblast3,
+    Erythroblast4,
+    Erythroblast5,
+    Erythroblast6,
+    Erythroblast7,
+    Erythroblast8,
+    RBC,
+    Myeloblast1,
+    Myeloblast2,
+    Myeloblast3,
+    Myeloblast4,
+    Myeloblast5,
+    Myeloblast6,
+    Myeloblast7,
+    Myeloid,
+    Megakaryocyte,
+    Platelet,
+    Lymphocyte1,
+    Lymphocyte2,
+    Lymphocyte3,
+    Lymphocyte4,
+    Lymphocyte5,
+    Lymphocyte6,
+    Lymphocyte7,
+    Bcell,
+    STROMA,
 };
 
 
-
-// Cell type names for output
 inline const char* getCellTypeName(CellType type) {
-    static const char* names[] = {
-        "HSC", "MPP1", "MPP2", "MPP3", "CMP", "CLP", "MEP", "GMP", 
-        "Erythrocyte", "Granulocyte", "Lymphocyte", "Stromal"
-    };
-    return names[static_cast<int>(type)];
+    return magic_enum::enum_name(type).data();  // returns a string_view's c_str
 }
+
 
 // Define cell types in lineage tree
 inline const std::map<CellType, std::vector<CellType>> LINEAGE_TREE = {
     {HSC, {MPP1}},
     {MPP1, {MPP2}},
     {MPP2, {MPP3}},
-    {MPP3, {CMP, CLP}},
+    {MPP3, {MPP4}},
+    {MPP4, {MPP5}},
+    {MPP5, {CMP, CLP}},
     {CMP, {MEP, GMP}},
-    {MEP, {Erythrocyte}},
-    {GMP, {Granulocyte}},
-    {CLP, {Lymphocyte}},
-    {STROMAL, {}}
+    {MEP, {Megakaryocyte}},
+    {Megakaryocyte, {Platelet}},
+    {MEP, {Erythroblast1}},
+    {Erythroblast1, {Erythroblast2}},
+    {Erythroblast2, {Erythroblast3}},
+    {Erythroblast3, {Erythroblast4}},
+    {Erythroblast4, {Erythroblast5}},
+    {Erythroblast5, {Erythroblast6}},
+    {Erythroblast6, {Erythroblast7}},
+    {Erythroblast7, {Erythroblast8}},
+    {Erythroblast8, {RBC}},
+    {GMP, {Myeloblast1}},
+    {Myeloblast1, {Myeloblast2}},
+    {Myeloblast2, {Myeloblast3}},
+    {Myeloblast3, {Myeloblast4}},
+    {Myeloblast4, {Myeloblast5}},
+    {Myeloblast5, {Myeloblast6}},
+    {Myeloblast6, {Myeloblast7}},
+    {Myeloblast7, {Myeloid}},
+    {CLP, {Lymphocyte1}},
+    {Lymphocyte1, {Lymphocyte2}},
+    {Lymphocyte2, {Lymphocyte3}},
+    {Lymphocyte3, {Lymphocyte4}},
+    {Lymphocyte4, {Lymphocyte5}},
+    {Lymphocyte5, {Lymphocyte6}},
+    {Lymphocyte6, {Lymphocyte7}},
+    {Lymphocyte7, {Bcell}},
 };
 
 // Map for cell radii
@@ -63,7 +111,7 @@ inline const std::map<CellType, float> CELL_RADII = {
     {Granulocyte, 3.0f},
     {Erythrocyte, 3.0f},
     {Lymphocyte, 3.0f},
-    {STROMAL, 6.0f}
+    {stroma, 6.0f}
 };
 
 // Map for cell division probabilities
@@ -79,7 +127,7 @@ inline const std::map<CellType, float> DIVISION_PROB = {
     {Granulocyte, 0.0f},
     {Erythrocyte, 0.0f},
     {Lymphocyte, 0.0f},
-    {STROMAL, 0.0f}
+    {stroma, 0.0f}
 };
 
 // Map for cell leaving probabilities
@@ -97,7 +145,7 @@ inline const std::map<CellType, float> LEAVE_PROB = {
     {Granulocyte, FINAL_LEAVING_PROB},
     {Erythrocyte, FINAL_LEAVING_PROB},
     {Lymphocyte, FINAL_LEAVING_PROB},
-    {STROMAL, 0.0f}
+    {stroma, 0.0f}
 };
 
 // Map for cell death probabilities
@@ -113,7 +161,7 @@ inline const std::map<CellType, float> CELL_DEATH_PROB = {
     {Granulocyte, 0.000f},
     {Erythrocyte, 0.000f},
     {Lymphocyte, 0.000f},
-    {STROMAL, 0.000f}
+    {stroma, 0.000f}
 };
 
 // Map for cell motility
@@ -129,7 +177,7 @@ inline const std::map<CellType, float> MOTILITY = {
     {Granulocyte, 0.3f},
     {Erythrocyte, 0.3f},
     {Lymphocyte, 0.3f},
-    {STROMAL, 0.f}
+    {stroma, 0.f}
 }; 
 
 // Map for cell motility
@@ -159,7 +207,7 @@ inline const std::map<CellType, std::tuple<int, int, int>> CELL_COLORS = {
     {Granulocyte, {150, 200, 255}}, // Light Blue
     {Erythrocyte, {0, 150, 255}},     // Blue
     {Lymphocyte, {0, 255, 255}},     // Cyan
-    {STROMAL, {255, 255, 255}}     // White
+    {stroma, {255, 255, 255}}     // White
 };
 
 
@@ -168,16 +216,15 @@ inline const std::map<CellType, float> INITIAL_CELL_NUMBERS = {
     {MPP1, 5},
     {MPP2, 50},
     {MPP3, 100},
-    {CMP, 100},
-    {CLP, 100},
-    {MEP, 100},
+    {CMP, 200},
+    {CLP, 200},
+    {MEP, 200},
     {GMP, 200},
     {Granulocyte, 2000},
     {Erythrocyte, 2000},
     {Lymphocyte, 1000},
-    {STROMAL, -1}
+    {stroma, -1}
 };
-
 
 
 #endif
