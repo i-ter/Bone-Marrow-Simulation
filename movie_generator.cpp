@@ -139,7 +139,7 @@ void MovieGenerator::readCellDataFromFile(const std::string& filename) {
         cell.active = (token == "0"); // Assuming 0 means active
         
         // Get radius based on cell type
-        cell.radius = CELL_RADII.at(cell.type);
+        cell.radius = get_with_default(CELL_RADII, cell.type, DEFAULT_CELL_RADII);
         
         // Add to step data
         stepData[step].push_back(cell);

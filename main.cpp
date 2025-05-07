@@ -192,7 +192,7 @@ public:
 
     void updateType(CellType type) {
         cell_type = type;
-        radius = CELL_RADII.at(type);
+        radius = get_with_default(CELL_RADII, type, DEFAULT_CELL_RADII);
     }
 
     Cell(float x, float y, float radius, CellType type, int clone_id) 
@@ -207,7 +207,7 @@ public:
     void move(const float& width, const float& height) {
         // Define diffusion coefficient
         float dt = 1.0; // Define a time step, can be adjusted
-        float D = MOTILITY.at(cell_type);
+        float D = get_with_default(MOTILITY, cell_type, DEFAULT_CELL_MOTILITY);
         // Update position with spatial diffusion
         
         dx = D * sqrt(dt) * normal_dist(gen);   
@@ -322,18 +322,18 @@ public:
     }
 
     bool should_divide() {
-        return unif_01(gen) < DIVISION_PROB.at(cell_type);
+        return unif_01(gen) < get_with_default(DIVISION_PROB, cell_type, DEFAULT_DIVISION_PROB);
     }
 
     // Check if cell should die (all cell types)
     bool should_die() {
-        return unif_01(gen) < CELL_DEATH_PROB.at(cell_type);
+        return unif_01(gen) < get_with_zero(CELL_DEATH_PROB, cell_type);
     }
     
     // Check if cell should leave (based on probability from LEAVE_PROB map)
     bool should_leave() {
         float multiplier = in_vessel_neighbourhood ? VESSEL_LEAVING_MULTIPLIER : 1.0;
-        return unif_01(gen) < LEAVE_PROB.at(cell_type) * multiplier;
+        return unif_01(gen) < get_with_zero(LEAVE_PROB, cell_type) * multiplier;
     }
 };
 
@@ -453,14 +453,14 @@ public:
         paramsFile << "cell_type,radius,division_probability,death_probability,leave_probability,motility,initial_number" << endl;
         
         // Write cell type specific parameters
-        for (const auto& [type, radius] : CELL_RADII) {
+        for (const auto& [type, _] : LINEAGE_TREE) {
             paramsFile << getCellTypeName(type) << ","
-                      << radius << ","
-                      << DIVISION_PROB.at(type) << ","
-                      << CELL_DEATH_PROB.at(type) << ","
-                      << LEAVE_PROB.at(type) << ","
-                      << MOTILITY.at(type) << ","
-                      << INITIAL_CELL_NUMBERS.at(type) << endl;
+                      << get_with_default(CELL_RADII, type, DEFAULT_CELL_RADII) << ","
+                      << get_with_default(DIVISION_PROB, type, DEFAULT_DIVISION_PROB) << ","
+                      << get_with_zero(CELL_DEATH_PROB, type) << ","
+                      << get_with_zero(LEAVE_PROB, type) << ","
+                      << get_with_default(MOTILITY, type, DEFAULT_CELL_MOTILITY) << ","
+                      << get_with_zero(INITIAL_CELL_NUMBERS, type) << endl;
         }
         paramsFile.close();
         
@@ -474,7 +474,7 @@ public:
             for (int i = 0; i < initial_cells; ++i){
                 float x = static_cast<float>(unif_01(gen) * width);
                 float y = static_cast<float>(unif_01(gen) * height);
-                cells.push_back(make_unique<Cell>(x, y, CELL_RADII.at(HSC), HSC, i));
+                cells.push_back(make_unique<Cell>(x, y, get_with_default(CELL_RADII, HSC, DEFAULT_CELL_RADII), HSC, i));
             }
         } else {
             cout<< "WARM STARTING THE SIMULATION" << endl;
@@ -483,7 +483,7 @@ public:
                 for (int i = 0; i < num; ++i) {
                     float x = static_cast<float>(unif_01(gen) * width);
                     float y = static_cast<float>(unif_01(gen) * height);
-                    cells.push_back(make_unique<Cell>(x, y, CELL_RADII.at(type), type, i));
+                    cells.push_back(make_unique<Cell>(x, y, get_with_default(CELL_RADII, HSC, DEFAULT_CELL_RADII), type, i));
                 }
             }
         }
@@ -494,10 +494,10 @@ public:
         for (int i = 0; i < nStromaCells; ++i) {
             float x = static_cast<float>(unif_01(gen) * width);
             float y = static_cast<float>(unif_01(gen) * height);
-            cells.push_back(make_unique<Cell>(x, y, CELL_RADII.at(STROMAL), STROMAL, -1));
+            cells.push_back(make_unique<Cell>(x, y, get_with_default(CELL_RADII, STROMA, DEFAULT_CELL_RADII), STROMA, -1));
         }
 
-        cout << "Generated " << nStromaCells << " stromal cells" << endl;
+        cout << "Generated " << nStromaCells << " stroma cells" << endl;
 
         generateBloodVessels(num_vessels);
     }
@@ -631,7 +631,7 @@ public:
                 float new_y = cell->y + (unif_01(gen) * 2. - 1.) * offset;
                 
                 // set velocity to 0
-                new_cells.push_back(make_unique<Cell>(new_x, new_y, CELL_RADII.at(new_type), new_type, cell->clone_id));
+                new_cells.push_back(make_unique<Cell>(new_x, new_y, get_with_default(CELL_RADII, new_type, DEFAULT_CELL_RADII), new_type, cell->clone_id));
                 if (cell->getType() != HSC) {
                     cell->updateType(new_type);
                 }
@@ -765,9 +765,9 @@ int main(int argc, char* argv[])
                 sim_name = argv[++i];
             } else if ((arg == "--vessels" || arg == "-v") && i + 1 < argc) {
                 num_vessels = stoi(argv[++i]);
-            } else if ((arg == "cold_start" || arg == "cs") && i + 1 < argc) {
+            } else if ((arg == "--cold_start" || arg == "-cs") && i + 1 < argc) {
                 string cold_start_str = argv[++i];
-                transform(cold_start_str.begin(), cold_start_str.end(), cold_start_str.begin(), ::tolower);
+                // transform(cold_start_str.begin(), cold_start_str.end(), cold_start_str.begin(), ::tolower);
                 cold_start = (cold_start_str == "true" || cold_start_str == "1" || cold_start_str == "yes" || cold_start_str == "y");
             } else if (arg == "--help") {
                 cout << "Bone Marrow Simulation\n"

@@ -13,6 +13,7 @@ constexpr float VESSEL_DISTANCE_THRESHOLD = 20.0f;
 constexpr float VESSEL_LEAVING_MULTIPLIER = 10.0f;
 constexpr float CXCL_DENSITY_PER_100_AREA = 6.0f;
 
+
 enum CellType {
     HSC,
     MPP1,
@@ -61,7 +62,7 @@ inline const char* getCellTypeName(CellType type) {
 
 
 // Define cell types in lineage tree
-inline const std::map<CellType, std::vector<CellType>> LINEAGE_TREE = {
+inline const std::unordered_map<CellType, std::vector<CellType>> LINEAGE_TREE = {
     {HSC, {MPP1}},
     {MPP1, {MPP2}},
     {MPP2, {MPP3}},
@@ -98,133 +99,177 @@ inline const std::map<CellType, std::vector<CellType>> LINEAGE_TREE = {
     {Lymphocyte7, {Bcell}},
 };
 
-// Map for cell radii
-inline const std::map<CellType, float> CELL_RADII = {
-    {HSC, 4.0f},
-    {MPP1, 4.0f},
-    {MPP2, 4.0f},
-    {MPP3, 4.0f},
-    {CMP, 4.0f},
-    {CLP, 4.0f},
-    {MEP, 4.0f},
-    {GMP, 4.0f},
-    {Granulocyte, 3.0f},
-    {Erythrocyte, 3.0f},
-    {Lymphocyte, 3.0f},
-    {stroma, 6.0f}
+constexpr float DEFAULT_CELL_RADII = 4.0f;
+// unordered_map for cell radii
+inline const std::unordered_map<CellType, float> CELL_RADII = {
+    {STROMA, 6.0f},
+    {Megakaryocyte, 10.0f},
+    {Platelet, 1.0f},
+    {RBC, 1.0f}
 };
 
-// Map for cell division probabilities
-inline const std::map<CellType, float> DIVISION_PROB = {
+
+constexpr float DEFAULT_DIVISION_PROB = 0.01f;
+// unordered_map for cell division probabilities
+inline const std::unordered_map<CellType, float> DIVISION_PROB = {
     {HSC, 0.01f},
     {MPP1, 0.05f},
     {MPP2, 0.05f},
     {MPP3, 0.05f},
-    {CMP, 0.1f},
-    {CLP, 0.1f},
-    {MEP, 0.1f},
-    {GMP, 0.1f},
-    {Granulocyte, 0.0f},
-    {Erythrocyte, 0.0f},
-    {Lymphocyte, 0.0f},
-    {stroma, 0.0f}
+    {MPP4, 0.05f}, 
+    {MPP5, 0.05f},
+    {CMP, 0.1f}, // RPP1
+    {CLP, 0.1f}, // RRP1
+    {MEP, 0.1f}, // RPP2
+    {GMP, 0.1f}, // RRP2
+    {Erythroblast8, 0.1f},
+    {Myeloblast7, 0.1f},
+    {Megakaryocyte, 0.1f},
+    {Lymphocyte7, 0.1f},
+    {Bcell, 0.0f},
+    {Myeloid, 0.0f},
+    {RBC, 0.0f},
+    {Platelet, 0.0f},
+    {STROMA, 0.0f}
 };
 
-// Map for cell leaving probabilities
-constexpr float FINAL_LEAVING_PROB = 0.001f;
+// unordered_map for cell leaving probabilities
+constexpr float FINAL_LEAVING_PROB = 0.01f;
 
-inline const std::map<CellType, float> LEAVE_PROB = {
-    {HSC, 0.0f},
-    {MPP1, 0.0f},
-    {MPP2, 0.0f},
-    {MPP3, 0.0f},
-    {CMP, 0.0f},
-    {CLP, 0.0f},
-    {MEP, 0.0f},
-    {GMP, 0.0f},
-    {Granulocyte, FINAL_LEAVING_PROB},
-    {Erythrocyte, FINAL_LEAVING_PROB},
-    {Lymphocyte, FINAL_LEAVING_PROB},
-    {stroma, 0.0f}
+inline const std::unordered_map<CellType, float> LEAVE_PROB = {
+    {RBC, FINAL_LEAVING_PROB},
+    {Platelet, FINAL_LEAVING_PROB},
+    {Bcell, FINAL_LEAVING_PROB},
+    {Myeloid, FINAL_LEAVING_PROB},
+    {Megakaryocyte, FINAL_LEAVING_PROB},
 };
 
-// Map for cell death probabilities
-inline const std::map<CellType, float> CELL_DEATH_PROB = {
-    {HSC, 0.000f},
-    {MPP1, 0.000f},
-    {MPP2, 0.000f},
-    {MPP3, 0.000f},
-    {CMP, 0.000f},
-    {CLP, 0.000f},
-    {MEP, 0.000f},
-    {GMP, 0.000f},
-    {Granulocyte, 0.000f},
-    {Erythrocyte, 0.000f},
-    {Lymphocyte, 0.000f},
-    {stroma, 0.000f}
-};
-
-// Map for cell motility
-inline const std::map<CellType, float> MOTILITY = {
-    {HSC, 1.0f},
-    {MPP1, 0.8f},
-    {MPP2, 0.7f},
-    {MPP3, 0.6f},
-    {CMP, 0.5f},
-    {CLP, 0.5f},
-    {MEP, 0.5f},
-    {GMP, 0.5f},
-    {Granulocyte, 0.3f},
-    {Erythrocyte, 0.3f},
-    {Lymphocyte, 0.3f},
-    {stroma, 0.f}
-}; 
-
-// Map for cell motility
-// inline const std::map<CellType, float> MOTILITY = {
-//     {HSC, 5.0f},
-//     {MPP1, 4.0f},
-//     {MPP2, 3.0f},
-//     {MPP3, 3.0f},
-//     {CMP, 3.0f},
-//     {CLP, 3.0f},
-//     {MEP, 3.0f},
-//     {GMP, 3.0f},
-//     {Granulocyte, 3.0f},
-//     {Erythrocyte, 3.0f},
-//     {Lymphocyte, 3.0f}
-// }; 
-
-inline const std::map<CellType, std::tuple<int, int, int>> CELL_COLORS = {
-    {HSC, {255, 0, 0}},           // Red
-    {MPP1, {255, 165, 0}},        // Orange
-    {MPP2, {255, 165, 0}},        // Orange
-    {MPP3, {255, 165, 0}},        // Orange
-    {CMP, {0, 255, 0}},           // Green
-    {CLP, {0, 255, 0}},           // Green
-    {MEP, {0, 255, 0}},           // Green
-    {GMP, {0, 255, 0}},           // Green
-    {Granulocyte, {150, 200, 255}}, // Light Blue
-    {Erythrocyte, {0, 150, 255}},     // Blue
-    {Lymphocyte, {0, 255, 255}},     // Cyan
-    {stroma, {255, 255, 255}}     // White
+// unordered_map for cell death probabilities
+inline const std::unordered_map<CellType, float> CELL_DEATH_PROB = {
 };
 
 
-inline const std::map<CellType, float> INITIAL_CELL_NUMBERS = {
+constexpr float DEFAULT_CELL_MOTILITY = 0.0f;
+
+// unordered_map for cell motility
+inline const std::unordered_map<CellType, float> MOTILITY = {
+//     {HSC, 0.5f},
+//     {MPP1, 0.5f},
+//     {MPP2, 0.5f},
+//     {MPP3, 0.5f},
+//     {CMP, 0.5f},
+//     {CLP, 0.5f},
+//     {MEP, 0.5f},
+//     {GMP, 0.5f},
+};
+
+inline const std::unordered_map<CellType, std::tuple<int, int, int>> CELL_COLORS = {
+    // HSC/MPP lineage (Red-Orange)
+    {HSC, {220, 20, 60}},         // Crimson
+    {MPP1, {255, 69, 0}},         // OrangeRed
+    {MPP2, {255, 99, 71}},        // Tomato
+    {MPP3, {255, 140, 0}},        // DarkOrange
+    {MPP4, {255, 165, 0}},        // Orange
+    {MPP5, {255, 200, 0}},        // Lighter Orange
+
+    // CMP/MEP/Erythroblast/RBC (Blue family)
+    {CMP, {30, 144, 255}},        // DodgerBlue
+    {MEP, {65, 105, 225}},        // RoyalBlue
+    {Erythroblast1, {100, 149, 237}}, // CornflowerBlue
+    {Erythroblast2, {70, 130, 180}},  // SteelBlue
+    {Erythroblast3, {135, 206, 250}}, // LightSkyBlue
+    {Erythroblast4, {176, 224, 230}}, // PowderBlue
+    {Erythroblast5, {173, 216, 230}}, // LightBlue
+    {Erythroblast6, {135, 206, 235}}, // SkyBlue
+    {Erythroblast7, {0, 191, 255}},   // DeepSkyBlue
+    {Erythroblast8, {0, 0, 255}},     // Blue
+    {RBC, {25, 25, 112}},             // MidnightBlue
+
+    // GMP/Myeloblast/Myeloid (Green family)
+    {GMP, {34, 139, 34}},         // ForestGreen
+    {Myeloblast1, {60, 179, 113}},// MediumSeaGreen
+    {Myeloblast2, {46, 139, 87}}, // SeaGreen
+    {Myeloblast3, {0, 128, 0}},   // Green
+    {Myeloblast4, {0, 255, 127}}, // SpringGreen
+    {Myeloblast5, {144, 238, 144}}, // LightGreen
+    {Myeloblast6, {152, 251, 152}}, // PaleGreen
+    {Myeloblast7, {50, 205, 50}}, // LimeGreen
+    {Myeloid, {0, 100, 0}},       // DarkGreen
+
+    // CLP/Lymphocyte/Bcell (Purple family)
+    {CLP, {138, 43, 226}},        // BlueViolet
+    {Lymphocyte1, {148, 0, 211}}, // DarkViolet
+    {Lymphocyte2, {186, 85, 211}},// MediumOrchid
+    {Lymphocyte3, {221, 160, 221}},// Plum
+    {Lymphocyte4, {218, 112, 214}},// Orchid
+    {Lymphocyte5, {199, 21, 133}}, // MediumVioletRed
+    {Lymphocyte6, {153, 50, 204}}, // DarkOrchid
+    {Lymphocyte7, {128, 0, 128}},  // Purple
+    {Bcell, {75, 0, 130}},         // Indigo
+
+    // Megakaryocyte/Platelet (Yellow/Gold)
+    {Megakaryocyte, {255, 215, 0}}, // Gold
+    {Platelet, {255, 255, 102}},    // Light Yellow
+
+    // Stroma
+    {STROMA, {169, 169, 169}},      // DarkGray
+};
+
+
+inline const std::unordered_map<CellType, float> INITIAL_CELL_NUMBERS = {
     {HSC, 1},
     {MPP1, 5},
-    {MPP2, 50},
-    {MPP3, 100},
-    {CMP, 200},
-    {CLP, 200},
-    {MEP, 200},
-    {GMP, 200},
-    {Granulocyte, 2000},
-    {Erythrocyte, 2000},
-    {Lymphocyte, 1000},
-    {stroma, -1}
+    {MPP2, 5},
+    {MPP3, 5},
+    {MPP4, 5},  
+    {MPP5, 5},
+    {CMP, 30},
+    {CLP, 30},
+    {MEP, 30},
+    {GMP, 30},
+    {Erythroblast1, 30},
+    {Erythroblast2, 60},
+    {Erythroblast3, 120},
+    {Erythroblast4, 180},
+    {Erythroblast5, 320},
+    {Erythroblast6, 340},
+    {Erythroblast7, 200},
+    {Erythroblast8, 100},
+    {RBC, 100},
+    {Myeloblast1, 30},
+    {Myeloblast2, 60},
+    {Myeloblast3, 120},
+    {Myeloblast4, 180},
+    {Myeloblast5, 320},
+    {Myeloblast6, 240},
+    {Myeloblast7, 100},
+    {Myeloid, 500},
+    {Megakaryocyte, 30},
+    {Lymphocyte1, 30},
+    {Lymphocyte2, 60},
+    {Lymphocyte3, 120},
+    {Lymphocyte4, 180},
+    {Lymphocyte5, 320},
+    {Lymphocyte6, 240},
+    {Lymphocyte7, 100},
+    {Bcell, 100},
 };
+
+
+
+template<typename Value> // basically int or float
+inline Value get_with_default(const std::unordered_map<CellType, Value>& m, CellType k, Value def) {
+    try {
+        return m.at(k);
+    } catch (const std::out_of_range&) {
+        return def;
+    }
+}
+
+template<typename Value>
+inline Value get_with_zero(const std::unordered_map<CellType, Value>& m, CellType k) {
+    return get_with_default(m, k, Value{0});
+}
 
 
 #endif
