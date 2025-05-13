@@ -7,13 +7,21 @@ int main(int argc, char* argv[]) {
     try {
         // Default simulation name
         std::string simName = "test";
-        
-        // If a simulation name is provided as command line argument, use it
-        if (argc > 1) {
-            simName = argv[1];
+        std::string color_mode = "type"; // clone or type
+
+        // Parse command-line arguments
+        if (argc > 1) { 
+            for (int i = 1; i < argc; i++) {
+                std::string arg = argv[i];
+                if (arg == "--name" || arg == "-n") {
+                    simName = argv[i+1];
+                } else if (arg == "--color" || arg == "-c") {
+                    color_mode = argv[i+1];
+                }
+            }
         }
-        
-        std::cout << "Generating movie for simulation: " << simName << std::endl;
+
+        std::cout << "Generating movie for simulation: " << simName << " with color mode: " << color_mode << std::endl;
 
         std::string paramsFilename = "data/" + simName + "_params.csv";
         std::ifstream paramsFile(paramsFilename);
@@ -35,7 +43,7 @@ int main(int argc, char* argv[]) {
         std::cout << "width: " << width << " height: " << height << std::endl;
 
         // Create a movie generator with the same dimensions as the simulation
-        MovieGenerator movieGen(width, height);
+        MovieGenerator movieGen(width, height, color_mode);
         
         // Generate the movie with 30 fps
         movieGen.generateMovie(simName, 30);

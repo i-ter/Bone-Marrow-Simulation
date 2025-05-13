@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <sstream>
 #include <cmath>
+#include <cassert>
 #include <fstream>  // Add for file operations
 #include "cell_config.h"  // Import the cell configuration
 
@@ -479,12 +480,22 @@ public:
         } else {
             
             int starting_cells = 0;
+            int HSPC_num = 0; // tag HSPC cells with clone_id
 
-            for (const auto& [type, num] : INITIAL_CELL_NUMBERS) {
+            for (auto& [type, num] : INITIAL_CELL_NUMBERS) {
+                num /= 10;
                 for (int i = 0; i < num; ++i) {
                     float x = static_cast<float>(unif_01(gen) * width);
                     float y = static_cast<float>(unif_01(gen) * height);
-                    cells.push_back(make_unique<Cell>(x, y, get_with_default(CELL_RADII, HSC, DEFAULT_CELL_RADII), type, i));
+                    float radius = get_with_default(CELL_RADII, type, DEFAULT_CELL_RADII);
+                    
+                    int clone_id = -1;
+                    if (type < 11) {
+                        clone_id = HSPC_num;
+                        HSPC_num++;
+                    }
+
+                    cells.push_back(make_unique<Cell>(x, y, radius, type, clone_id));
                 }
                 starting_cells += num;
             }
@@ -493,11 +504,12 @@ public:
         
         float totalArea = width*height;
         float nStromaCells = totalArea/10000 * CXCL_DENSITY_PER_100_AREA;
+        float stroma_radius = get_with_default(CELL_RADII, STROMA, DEFAULT_CELL_RADII);
         
         for (int i = 0; i < nStromaCells; ++i) {
             float x = static_cast<float>(unif_01(gen) * width);
             float y = static_cast<float>(unif_01(gen) * height);
-            cells.push_back(make_unique<Cell>(x, y, get_with_default(CELL_RADII, STROMA, DEFAULT_CELL_RADII), STROMA, -1));
+            cells.push_back(make_unique<Cell>(x, y, stroma_radius, STROMA, -1));
         }
 
         cout << "Generated " << nStromaCells << " stroma cells" << endl;
@@ -516,14 +528,18 @@ public:
         return BloodVessel(start_x, start_y, length, radius, angle);
     }
 
-    BloodVessel generateFixedVessel() {
+    void generateFixedVessels() {
         float start_x = width/4;
         float start_y = height/2;
         float length = width/2;
         float radius = 20;
         float angle = 0;
 
-        return BloodVessel(start_x, start_y, length, radius, angle);
+        blood_vessels.push_back(BloodVessel(start_x, start_y, length, radius, angle));
+        blood_vessels.push_back(BloodVessel(start_x, height/4, length, radius, angle));
+        blood_vessels.push_back(BloodVessel(start_x, 3*height/4, length, radius, angle));
+
+        return;
     }
     
     // Check if a vessel is valid (within bounds and not intersecting other vessels too much)
@@ -542,10 +558,9 @@ public:
     
     // Generate all blood vessels
     void generateBloodVessels(int num_vessels) {
-        int max_attempts = num_vessels * 10; // Maximum generation attempts
-        int attempts = 0;
 
-        blood_vessels.push_back(generateFixedVessel());
+        generateFixedVessels();
+
         // Write vessel data to file
         string vesselFilename = dataDir + "/" + sim_name + "_vessels.csv";
         vesselDataFile.open(vesselFilename);
@@ -563,8 +578,7 @@ public:
         
         vesselDataFile.close();
         
-        cout << "Generated " << blood_vessels.size() << " blood vessels out of " 
-             << num_vessels << " requested (after " << attempts+1 << " attempts)" << endl;
+        cout << "Generated " << blood_vessels.size() << " blood vessels" << endl;
     }
 
     
@@ -615,38 +629,46 @@ public:
         // 4. Cell division
         for (auto& cell : cells) {
             if (cell->should_divide()) {
-                if (cell->is_dead && cell->is_leaving ) {throw runtime_error("Cell is dead or leaving. something is wrong.");}
-                
+                assert(!(cell->is_dead || cell->is_leaving) && "Cell is dead or leaving. Something is wrong.");
+
                 auto& possible_types = LINEAGE_TREE.at(cell->getType());
                 CellType new_type = possible_types[std::rand() % possible_types.size()];
-                
-                float offset = cell->radius;
-                float new_x = cell->x + (unif_01(gen) * 2. - 1.) * offset;
-                float new_y = cell->y + (unif_01(gen) * 2. - 1.) * offset;
+
+                float new_radius = get_with_default(CELL_RADII, new_type, DEFAULT_CELL_RADII);
+                float offset = cell->radius + new_radius;
+                float angle = angle_dist(gen);
+
+                // Calculate new position using polar coordinates
+                float new_x = cell->x + offset * cos(angle);
+                float new_y = cell->y + offset * sin(angle);
                 
                 // set velocity to 0
-                new_cells.push_back(make_unique<Cell>(new_x, new_y, get_with_default(CELL_RADII, new_type, DEFAULT_CELL_RADII), new_type, cell->clone_id));
+                new_cells.push_back(make_unique<Cell>(new_x, new_y, new_radius, new_type, cell->clone_id));
+                
                 if (cell->getType() != HSC) {
-                    cell->updateType(new_type);
+                    // two daughter cells, each w own fate decision. modify original cell.
+                    if (possible_types.size() == 2) {
+                        cell->updateType(possible_types[std::rand() % possible_types.size()]);
+                    } else {
+                        cell->updateType(new_type);
+                    }
                 }
             }
         }
 
         // 5. Check for cell death and leaving
-        for (auto& cell : cells) {
-            CellType cellType = cell->getType();
-            
+        for (auto& cell : cells) {            
             // Check for cell death (all cell types)
             if (cell->should_die()) {
                 cell->is_dead = true;
                 stats.total_deaths++;
-                stats.deaths_by_type[cellType]++;
+                stats.deaths_by_type[cell->getType()]++;
             }
             // Check for cell leaving (only terminal cells)
             else if (cell->should_leave()) {
                 cell->is_leaving = true;
                 stats.total_leaving++;
-                stats.leaving_by_type[cellType]++;
+                stats.leaving_by_type[cell->getType()]++;
             }
         }
         

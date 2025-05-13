@@ -10,7 +10,7 @@
 
 constexpr float MAX_SPEED = 1.0f;
 constexpr float VESSEL_DISTANCE_THRESHOLD = 20.0f;
-constexpr float VESSEL_LEAVING_MULTIPLIER = 1.0f;
+constexpr float VESSEL_LEAVING_MULTIPLIER = 10.0f;
 constexpr float CXCL_DENSITY_PER_100_AREA = 6.0f;
 
 // consdier the time step to be 10 mins
@@ -77,9 +77,8 @@ inline const std::unordered_map<CellType, std::vector<CellType>> LINEAGE_TREE = 
     {MPP4, {MPP5}},
     {MPP5, {CMP, CLP}},
     {CMP, {MEP, GMP}},
-    {MEP, {Megakaryocyte}},
+    {MEP, {Megakaryocyte, Erythroblast1}},
     // {Megakaryocyte, {Platelet}}, // megas just release platelets into blood stream
-    {MEP, {Erythroblast1}},
     {Erythroblast1, {Erythroblast2}},
     {Erythroblast2, {Erythroblast3}},
     {Erythroblast3, {Erythroblast4}},
@@ -119,8 +118,8 @@ inline const std::unordered_map<CellType, float> CELL_RADII = {
     {RBC, 2.0f}
 };
 
-
-constexpr float DEFAULT_DIVISION_PROB = 1.0f / TIME_UNITS_PER_DAY;
+// per day division probability divided by time step
+constexpr float DEFAULT_DIVISION_PROB = .5f / TIME_UNITS_PER_DAY;
 // unordered_map for cell division probabilities
 inline const std::unordered_map<CellType, float> DIVISION_PROB = {
     {HSC, 0.3f / TIME_UNITS_PER_DAY},
@@ -148,10 +147,11 @@ inline const std::unordered_map<CellType, float> CELL_DEATH_PROB = {
 };
 
 
-constexpr float DEFAULT_CELL_MOTILITY = 0.0f;
+constexpr float DEFAULT_CELL_MOTILITY = 0.5f;
 
 // unordered_map for cell motility
 inline const std::unordered_map<CellType, float> MOTILITY = {
+    {STROMA, 0.0f},
     // {HSC, 0.5f},
     // {MPP1, 0.5f},
     // {MPP2, 0.5f},
@@ -219,7 +219,7 @@ inline const std::unordered_map<CellType, std::tuple<int, int, int>> CELL_COLORS
 };
 
 // 500 x 500 micron grid
-inline const std::unordered_map<CellType, float> INITIAL_CELL_NUMBERS = {
+inline std::unordered_map<CellType, float> INITIAL_CELL_NUMBERS = {
     {HSC, 1},
     {MPP1, 2},
     {MPP2, 4},

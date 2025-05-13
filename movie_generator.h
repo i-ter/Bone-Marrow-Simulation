@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <iomanip>
 #include <cstdlib>
+#include <unordered_map>
 #include "cell_config.h"
 
 namespace fs = std::filesystem;
@@ -23,7 +24,8 @@ private:
     std::string framesDir;
     std::string dataDir;
     std::string videoDir;
-    
+    std::string color_mode;
+    std::unordered_map<int, sf::Color> clone_colors;
     // Cell data structure for reading from CSV
     struct CellData {
         CellType type;
@@ -54,7 +56,7 @@ private:
     void createVideoFromFrames(const std::string& outputVideo, int fps);
 
 public:
-    MovieGenerator(int width, int height);
+    MovieGenerator(int width, int height, std::string color_mode="type");
     ~MovieGenerator();
     
     // Main function to generate movie from a data file
