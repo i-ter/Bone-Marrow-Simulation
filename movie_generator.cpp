@@ -211,9 +211,13 @@ void MovieGenerator::generateFrames() {
                 // cellShape.setOrigin(sf::Vector2f(cell.radius, cell.radius));
                 cellShape.setPosition(sf::Vector2f(cell.x, cell.y));
                 
-                const auto& color = CELL_COLORS.at(cell.type);
-                sf::Color cellColor = sf::Color(std::get<0>(color), std::get<1>(color), std::get<2>(color));
-                cellShape.setFillColor(cellColor);
+                try {
+                    const auto& color = CELL_COLORS.at(cell.type);
+                    sf::Color cellColor = sf::Color(std::get<0>(color), std::get<1>(color), std::get<2>(color));
+                    cellShape.setFillColor(cellColor);
+                } catch (const std::out_of_range& e) {
+                    std::cerr << "Error: Cell type " << cell.type << " not found in CELL_COLORS" << std::endl;
+                }
                 
                 renderTexture.draw(cellShape);
             }

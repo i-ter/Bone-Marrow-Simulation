@@ -421,8 +421,8 @@ public:
           height(height), 
           num_vessels(num_vessels), 
           sim_name(sim_name), 
-          spatial_grid(width, height, 12.), 
-          cold_start(cold_start)
+          cold_start(cold_start),
+          spatial_grid(width, height, 12.0)
     {
         if (!fs::exists(dataDir))
         {
@@ -470,14 +470,15 @@ public:
         consolidatedDataFile << "step,cell_type,x,y,dx,dy,clone_id,vessel_neighbourhood,status" << endl;
         
         if (cold_start) {
-            cout<< "COLD STARTING THE SIMULATION" << endl;
+            cout<< "--- COLD STARTING THE SIMULATION ---" << endl;
             for (int i = 0; i < initial_cells; ++i){
                 float x = static_cast<float>(unif_01(gen) * width);
                 float y = static_cast<float>(unif_01(gen) * height);
                 cells.push_back(make_unique<Cell>(x, y, get_with_default(CELL_RADII, HSC, DEFAULT_CELL_RADII), HSC, i));
             }
         } else {
-            cout<< "WARM STARTING THE SIMULATION" << endl;
+            
+            int starting_cells = 0;
 
             for (const auto& [type, num] : INITIAL_CELL_NUMBERS) {
                 for (int i = 0; i < num; ++i) {
@@ -485,7 +486,9 @@ public:
                     float y = static_cast<float>(unif_01(gen) * height);
                     cells.push_back(make_unique<Cell>(x, y, get_with_default(CELL_RADII, HSC, DEFAULT_CELL_RADII), type, i));
                 }
+                starting_cells += num;
             }
+            cout<< "--- WARM STARTING THE SIMULATION WITH " << starting_cells << " CELLS ---" << endl;
         }
         
         float totalArea = width*height;
@@ -542,15 +545,6 @@ public:
         int max_attempts = num_vessels * 10; // Maximum generation attempts
         int attempts = 0;
 
-        
-        // while (blood_vessels.size() < static_cast<size_t>(num_vessels) && attempts < max_attempts) {
-        //     BloodVessel vessel = generateRandomVessel();
-        //     if (isVesselValid(vessel)) {
-        //         blood_vessels.push_back(vessel);
-        //     }
-        //     attempts++;
-        // }
-
         blood_vessels.push_back(generateFixedVessel());
         // Write vessel data to file
         string vesselFilename = dataDir + "/" + sim_name + "_vessels.csv";
@@ -570,7 +564,7 @@ public:
         vesselDataFile.close();
         
         cout << "Generated " << blood_vessels.size() << " blood vessels out of " 
-             << num_vessels << " requested (after " << attempts << " attempts)" << endl;
+             << num_vessels << " requested (after " << attempts+1 << " attempts)" << endl;
     }
 
     
@@ -701,12 +695,12 @@ public:
         
         cout << "\nDeaths by cell type:\n";
         for (const auto& [type, count] : stats.deaths_by_type) {
-            cout << "  " << type << ": " << count << endl;
+            cout << "  " << getCellTypeName(type) << ": " << count << endl;
         }
         
         cout << "\nLeaving by cell type:\n";
         for (const auto& [type, count] : stats.leaving_by_type) {
-            cout << "  " << type << ": " << count << endl;
+            cout << "  " << getCellTypeName(type) << ": " << count << endl;
         }
         
         cout << "\nRemaining cells by type:\n";
@@ -715,7 +709,7 @@ public:
             remaining_by_type[cell->getType()]++;
         }
         for (const auto& [type, count] : remaining_by_type) {
-            cout << "  " << type << ": " << count << endl;
+            cout << "  " << getCellTypeName(type) << ": " << count << endl;
         }
         cout << "==============================\n";
     }
