@@ -483,7 +483,7 @@ public:
             int HSPC_num = 0; // tag HSPC cells with clone_id
 
             for (auto& [type, num] : INITIAL_CELL_NUMBERS) {
-                num /= 10;
+                // num /= 10;
                 for (int i = 0; i < num; ++i) {
                     float x = static_cast<float>(unif_01(gen) * width);
                     float y = static_cast<float>(unif_01(gen) * height);

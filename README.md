@@ -21,7 +21,7 @@ make all
 After running the simulation, you can generate a movie from the saved frames:
 
 ```bash
-./gen_movie
+./gen_movie_main [options]
 ```
 
-Output frames are saved in the directory and movies in the `/movies` directory. 
+Output frames are saved in the `frames` directory and movies in the `movies` directory. 
