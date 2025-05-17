@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cassert>
 #include <fstream>       // Add for file operations
+#include <algorithm>     // For std::remove, std::min, std::max
 #include "cell_config.h" // Import the cell configuration
 
 using namespace std;
@@ -45,8 +46,7 @@ public:
     }
 
     // Check if a point is inside this blood vessel
-    bool contains(float x, float y) const
-    {
+    bool contains(float x, float y) const {
         // Vector from start point to test point
         float v1x = x - start_x;
         float v1y = y - start_y;
@@ -65,8 +65,7 @@ public:
         float projection_ratio = dot_product / vessel_length_squared;
 
         // If projection is outside the vessel segment, point is not in vessel
-        if (projection_ratio < 0.0 || projection_ratio > 1.0)
-        {
+        if (projection_ratio < 0.0 || projection_ratio > 1.0) {
             return false;
         }
 
@@ -82,8 +81,7 @@ public:
     }
 
     // Calculate distance from point to vessel centerline
-    float distanceFrom(float x, float y) const
-    {
+    float distanceFrom(float x, float y) const {
         // Vector from start point to test point
         float v1x = x - start_x;
         float v1y = y - start_y;
@@ -113,7 +111,7 @@ public:
     }
 };
 
-class Cell
+class Cell 
 {
 protected:
     CellType cell_type;
@@ -127,8 +125,7 @@ public:
     bool in_vessel_neighbourhood = false; // Flag to track if cell is currently inside a blood vessel
     int clone_id;
 
-    void updateType(CellType type)
-    {
+    void updateType(CellType type) {
         cell_type = type;
         radius = get_with_default(CELL_RADII, type, DEFAULT_CELL_RADII);
     }
@@ -138,13 +135,11 @@ public:
 
     ~Cell() {}
 
-    const CellType &getType() const
-    {
+    const CellType &getType() const {
         return cell_type;
     }
 
-    void move(const float &width, const float &height)
-    {
+    void move(const float &width, const float &height) {
         // Define diffusion coefficient
         float dt = 1.0; // Define a time step, can be adjusted
         float D = get_with_default(MOTILITY, cell_type, DEFAULT_CELL_MOTILITY);
@@ -158,8 +153,7 @@ public:
         handleBoundaryCollision(width, height);
     }
 
-    void handleBoundaryCollision(const float &width, const float &height)
-    {
+    void handleBoundaryCollision(const float &width, const float &height) {
         if (x - radius < 0)
         {
             x = radius;
@@ -182,8 +176,7 @@ public:
         }
     }
 
-    bool collidesWith(const Cell &other) const
-    {
+    bool collidesWith(const Cell &other) const {
         float dx = x - other.x;
         float dy = y - other.y;
         float distance_squared = dx * dx + dy * dy;
@@ -192,74 +185,56 @@ public:
     }
 
     // Check if cell collides with a blood vessel
-    bool inVesselNeighbour(const BloodVessel &vessel, const float &distance_threshold) const
-    {
+    bool inVesselNeighbour(const BloodVessel &vessel, const float &distance_threshold) const {
         return vessel.distanceFrom(x, y) <= distance_threshold;
     }
 
-    void resolveCollision(Cell &other)
-    {
+    void resolveCollision(Cell &other, const float &k, const float &dt) {
+        // Calculates the force of the collision. F_ij = k * overlap * n_ij.
+        // k is the spring constant. assumes unit mass.
+
         // Calculate displacement vector
         float x_diff = x - other.x;
         float y_diff = y - other.y;
         float distance = sqrt(x_diff * x_diff + y_diff * y_diff);
 
         // Ensure cells are not exactly on top of each other. leads to numerical instability.
-        if (distance < 0.1)
-        {
-            distance = adjustMinimalSeparation(x_diff, y_diff);
+        if (distance < 0.1) {
+            distance = 0.1;
         }
 
-        // Calculate minimum separation distance
-        float min_distance = radius + other.radius;
+        float overlap = radius + other.radius - distance;
 
         // If cells are overlapping
-        if (distance < min_distance)
-        {
-            float overlap = min_distance - distance;
-            separateCells(other, x_diff, y_diff, distance, overlap);
-            exchangeMomentum(other, x_diff, y_diff);
-            capVelocities();
-            other.capVelocities();
+        if (overlap < 0){
+            return;
         }
-    }
 
-    float adjustMinimalSeparation(float &x_diff, float &y_diff)
-    {
-        float angle = angle_dist(gen);
-        x_diff = cos(angle);
-        y_diff = sin(angle);
-        return 0.1;
-    }
-
-    void separateCells(Cell &other, float x_diff, float y_diff, float distance, float overlap)
-    {
+        // unit vector in the direction of the collision
         float nx = x_diff / distance;
         float ny = y_diff / distance;
-        float total_radius = radius + other.radius;
-        float ratio1 = radius / total_radius;
-        float ratio2 = other.radius / total_radius;
 
-        // Move this cell
-        x += nx * overlap * ratio2;
-        y += ny * overlap * ratio2;
+        // calculate the displacement of the cells (Hookean spring)
+        // TODO: consider damping this
+        float displacement = k * overlap / 2  * dt;  // equal split of the overlap scaled by dt and k
 
-        // Move other cell
-        other.x -= nx * overlap * ratio1;
-        other.y -= ny * overlap * ratio1;
+        // separate the cells
+        x += nx * displacement;
+        y += ny * displacement;
+        other.x -= nx * displacement;
+        other.y -= ny * displacement;
     }
 
-    void exchangeMomentum(Cell &other, float nx, float ny)
-    {
-        float dot1 = this->dx * nx + this->dy * ny;
-        float dot2 = other.dx * nx + other.dy * ny;
+    // void exchangeMomentum(Cell &other, float nx, float ny) {
+    //     float dot1 = this->dx * nx + this->dy * ny;
+    //     float dot2 = other.dx * nx + other.dy * ny;
 
-        // Update velocities
-        this->dx += (dot2 - dot1) * nx;
-        this->dy += (dot2 - dot1) * ny;
-        other.dx += (dot1 - dot2) * nx;
-        other.dy += (dot1 - dot2) * ny;
-    }
+    //     // Update velocities
+    //     this->dx += (dot2 - dot1) * nx;
+    //     this->dy += (dot2 - dot1) * ny;
+    //     other.dx += (dot1 - dot2) * nx;
+    //     other.dy += (dot1 - dot2) * ny;
+    // }
 
     void capVelocities()
     {
@@ -275,6 +250,12 @@ public:
     {
         this->dx = dx;
         this->dy = dy;
+    }
+
+    float distanceFrom(const Cell &other) const {
+        float dx = x - other.x;
+        float dy = y - other.y;
+        return sqrt(dx * dx + dy * dy);
     }
 
     bool should_divide()
@@ -293,6 +274,12 @@ public:
     {
         float multiplier = in_vessel_neighbourhood ? VESSEL_LEAVING_MULTIPLIER : 1.0;
         return unif_01(gen) < get_with_zero(LEAVE_PROB, cell_type) * multiplier;
+    }
+    
+    // if true, cell will swap with a random neighbour. 
+    bool should_swap() {
+        
+        return unif_01(gen) < get_with_default(MOTILITY, cell_type, DEFAULT_CELL_MOTILITY);
     }
 };
 
@@ -328,8 +315,7 @@ struct SpatialGrid
         grid[grid_x][grid_y].push_back(cell);
     }
 
-    vector<Cell *> getPotentialCollisions(const Cell *cell)
-    {
+    vector<Cell *> getPotentialCollisions(const Cell *cell) {
         vector<Cell *> result;
         int grid_x = static_cast<int>(cell->x / block_size);
         int grid_y = static_cast<int>(cell->y / block_size);
@@ -356,6 +342,35 @@ struct SpatialGrid
         }
 
         return result;
+    }
+    vector<Cell *> getValidNeighbours(const Cell *cell, int radius) {
+        vector<Cell *> result;
+        auto potential_collisions = getPotentialCollisions(cell);
+        for (auto &other : potential_collisions) {
+            // TODO: Find a better way to handle this.
+            if (other->radius > cell->radius) {
+                continue;
+            }
+
+            if (cell->distanceFrom(*other) <= radius) {
+                result.push_back(other);
+            }
+        }
+        return result;
+    }
+
+    void remove(Cell* cell_to_remove) {
+        // Use the same logic as insert to determine the grid cell, including clamping.
+        int grid_x_coord = std::min(grid_width - 1, std::max(0, static_cast<int>(cell_to_remove->x / block_size)));
+        int grid_y_coord = std::min(grid_height - 1, std::max(0, static_cast<int>(cell_to_remove->y / block_size)));
+
+        auto& bucket = grid[grid_x_coord][grid_y_coord];
+        
+        // Efficiently remove the cell pointer from the bucket.
+        // std::remove shifts matching elements to the end and returns an iterator to the new 'logical' end.
+        // vector::erase then removes the elements from this new logical end to the physical end.
+        auto it = std::remove(bucket.begin(), bucket.end(), cell_to_remove);
+        bucket.erase(it, bucket.end());
     }
 };
 
@@ -392,7 +407,7 @@ public:
           num_vessels(num_vessels),
           sim_name(sim_name),
           cold_start(cold_start),
-          spatial_grid(width, height, 12.0)
+          spatial_grid(width, height, 8.0)
     {
         if (!fs::exists(dataDir))
         {
@@ -458,7 +473,7 @@ public:
 
             for (auto &[type, num] : INITIAL_CELL_NUMBERS)
             {
-                // num /= 10;
+                num /= 3;
                 for (int i = 0; i < num; ++i)
                 {
                     float x = static_cast<float>(unif_01(gen) * width);
@@ -571,12 +586,48 @@ public:
         paramsFile.close();
     }
 
+    void swapCells(Cell *cell, Cell *neighbour) {
+        float temp_x = cell->x;
+        float temp_y = cell->y;
+        cell->x = neighbour->x;
+        cell->y = neighbour->y;
+        neighbour->x = temp_x;
+        neighbour->y = temp_y;
+    }
+
     void step() {
         vector<unique_ptr<Cell>> new_cells;
 
+        // 0. setup spatial grid for efficient handling of cell neighbourhood
+        spatial_grid.clear();
+        for (auto &cell : cells) {
+            spatial_grid.insert(cell.get());
+        }
+
         // 1. Move cells
         for (auto &cell : cells) {
-            cell->move(width, height);
+            // diffusion movement handled by cell
+            // cell->move(width, height);
+
+            // swapping cells with neighbours
+            if (cell->should_swap()) {
+                // find a random neighbour
+                vector<Cell *> neighbours = spatial_grid.getValidNeighbours(cell.get(), 10);
+                if (neighbours.size() > 0) {
+                    Cell *current_cell_ptr = cell.get(); // Get raw pointer from unique_ptr for the current cell
+                    Cell *random_neighbour = neighbours[rand() % neighbours.size()];
+
+                    // Remove both cells from their current grid positions BEFORE their coordinates are changed.
+                    // This ensures they are removed from the correct buckets based on their pre-swap locations.
+                    spatial_grid.remove(current_cell_ptr);
+                    spatial_grid.remove(random_neighbour);
+
+                    swapCells(current_cell_ptr, random_neighbour);
+
+                    spatial_grid.insert(current_cell_ptr);
+                    spatial_grid.insert(random_neighbour);
+                }
+            }
         }
 
         // 2. Handle blood vessel collisions
@@ -590,18 +641,18 @@ public:
             }
         }
 
-        // 3. Handle cell-cell collisions using spatial partitioning O(n log n)
-        spatial_grid.clear();
-        for (auto &cell : cells) {
-            spatial_grid.insert(cell.get());
-        }
+        float small_time_step = 0.1; // 1 min
+        int num_inner_steps = 10; // big loop is 10 mins
 
-        // Check for collisions and resolve them
-        for (auto &cell : cells) {
-            auto potential_collisions = spatial_grid.getPotentialCollisions(cell.get());
-            for (Cell *other : potential_collisions) {
-                if (cell->collidesWith(*other)) {
-                    cell->resolveCollision(*other);
+        // 3. Check for collisions and resolve them
+        for (int i = 0; i < num_inner_steps; ++i) {
+
+            for (auto &cell : cells) {
+                auto potential_collisions = spatial_grid.getPotentialCollisions(cell.get());
+                for (Cell *other : potential_collisions) {
+                    if (cell->collidesWith(*other)) {
+                        cell->resolveCollision(*other, 1, small_time_step);
+                    }
                 }
             }
         }
@@ -734,13 +785,13 @@ public:
 int main(int argc, char *argv[])
 {
     // Default values
-    float width = 1500.0;
-    float height = 1000.0;
+    float width = 50.0;
+    float height = 50.0;
     int initial_cells = 20;
-    int steps = 200;
+    int steps = 100;
     string sim_name = "bm_sim";
     int num_vessels = 10; // Default number of blood vessels
-    bool cold_start = false;
+    bool cold_start = true;
 
     // Parse command-line arguments
     if (argc > 1) {

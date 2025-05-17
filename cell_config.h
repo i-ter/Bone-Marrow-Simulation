@@ -114,8 +114,8 @@ constexpr float DEFAULT_CELL_RADII = 4.0f;
 inline const std::unordered_map<CellType, float> CELL_RADII = {
     {STROMA, 6.0f},
     {Megakaryocyte, 8.0f},
-    {Platelet, 2.0f},
-    {RBC, 2.0f}
+    // {Platelet, 2.0f},
+    // {RBC, 2.0f}
 };
 
 // per day division probability divided by time step
@@ -147,19 +147,19 @@ inline const std::unordered_map<CellType, float> CELL_DEATH_PROB = {
 };
 
 
-constexpr float DEFAULT_CELL_MOTILITY = 0.5f;
+constexpr float DEFAULT_CELL_MOTILITY = 0.0f;
 
 // unordered_map for cell motility
 inline const std::unordered_map<CellType, float> MOTILITY = {
     {STROMA, 0.0f},
-    // {HSC, 0.5f},
-    // {MPP1, 0.5f},
-    // {MPP2, 0.5f},
-    // {MPP3, 0.5f},
-    // {CMP, 0.5f},
-    // {CLP, 0.5f},
-    // {MEP, 0.5f},
-    // {GMP, 0.5f},
+    {HSC, 0.5f},
+    {MPP1, 0.5f},
+    {MPP2, 0.5f},
+    {MPP3, 0.5f},
+    {CMP, 0.5f},
+    {CLP, 0.5f},
+    {MEP, 0.5f},
+    {GMP, 0.5f},
 };
 
 inline const std::unordered_map<CellType, std::tuple<int, int, int>> CELL_COLORS = {
