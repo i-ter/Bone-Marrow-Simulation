@@ -45,41 +45,6 @@ public:
         end_y = start_y + length * sin(angle);
     }
 
-    // Check if a point is inside this blood vessel
-    bool contains(float x, float y) const {
-        // Vector from start point to test point
-        float v1x = x - start_x;
-        float v1y = y - start_y;
-
-        // Vector representing the vessel direction
-        float v2x = end_x - start_x;
-        float v2y = end_y - start_y;
-
-        // Length of vessel vector
-        float vessel_length_squared = v2x * v2x + v2y * v2y;
-
-        // Calculate dot product
-        float dot_product = v1x * v2x + v1y * v2y;
-
-        // Calculate projection ratio (how far along the vessel line)
-        float projection_ratio = dot_product / vessel_length_squared;
-
-        // If projection is outside the vessel segment, point is not in vessel
-        if (projection_ratio < 0.0 || projection_ratio > 1.0) {
-            return false;
-        }
-
-        // Find closest point on vessel line to test point
-        float closest_x = start_x + projection_ratio * v2x;
-        float closest_y = start_y + projection_ratio * v2y;
-
-        // Calculate distance from test point to closest point on vessel line
-        float distance_squared = (x - closest_x) * (x - closest_x) + (y - closest_y) * (y - closest_y);
-
-        // Check if distance is less than vessel radius
-        return distance_squared <= radius * radius;
-    }
-
     // Calculate distance from point to vessel centerline
     float distanceFrom(float x, float y) const {
         // Vector from start point to test point
@@ -154,23 +119,19 @@ public:
     }
 
     void handleBoundaryCollision(const float &width, const float &height) {
-        if (x - radius < 0)
-        {
+        if (x - radius < 0) {
             x = radius;
             dx = -dx;
         }
-        else if (x + radius > width)
-        {
+        else if (x + radius > width) {
             x = width - radius;
             dx = -dx;
         }
-        if (y - radius < 0)
-        {
+        if (y - radius < 0) {
             y = radius;
             dy = -dy;
         }
-        else if (y + radius > height)
-        {
+        else if (y + radius > height) {
             y = height - radius;
             dy = -dy;
         }
@@ -225,29 +186,15 @@ public:
         other.y -= ny * displacement;
     }
 
-    // void exchangeMomentum(Cell &other, float nx, float ny) {
-    //     float dot1 = this->dx * nx + this->dy * ny;
-    //     float dot2 = other.dx * nx + other.dy * ny;
-
-    //     // Update velocities
-    //     this->dx += (dot2 - dot1) * nx;
-    //     this->dy += (dot2 - dot1) * ny;
-    //     other.dx += (dot1 - dot2) * nx;
-    //     other.dy += (dot1 - dot2) * ny;
-    // }
-
-    void capVelocities()
-    {
+    void capVelocities() {
         float speed = sqrt(dx * dx + dy * dy);
-        if (speed > MAX_SPEED)
-        {
+        if (speed > MAX_SPEED) {
             dx = (dx / speed) * MAX_SPEED;
             dy = (dy / speed) * MAX_SPEED;
         }
     }
 
-    void setVelocity(float dx, float dy)
-    {
+    void setVelocity(float dx, float dy) {
         this->dx = dx;
         this->dy = dy;
     }
@@ -258,27 +205,23 @@ public:
         return sqrt(dx * dx + dy * dy);
     }
 
-    bool should_divide()
-    {
+    bool should_divide() {
         return unif_01(gen) < get_with_default(DIVISION_PROB, cell_type, DEFAULT_DIVISION_PROB);
     }
 
     // Check if cell should die (all cell types)
-    bool should_die()
-    {
+    bool should_die() {
         return unif_01(gen) < get_with_zero(CELL_DEATH_PROB, cell_type);
     }
 
     // Check if cell should leave (based on probability from LEAVE_PROB map)
-    bool should_leave()
-    {
+    bool should_leave() {
         float multiplier = in_vessel_neighbourhood ? VESSEL_LEAVING_MULTIPLIER : 1.0;
         return unif_01(gen) < get_with_zero(LEAVE_PROB, cell_type) * multiplier;
     }
     
     // if true, cell will swap with a random neighbour. 
     bool should_swap() {
-        
         return unif_01(gen) < get_with_default(MOTILITY, cell_type, DEFAULT_CELL_MOTILITY);
     }
 };
@@ -652,6 +595,9 @@ public:
                 for (Cell *other : potential_collisions) {
                     if (cell->collidesWith(*other)) {
                         cell->resolveCollision(*other, 1, small_time_step);
+                        
+                        cell->handleBoundaryCollision(width, height);
+                        other->handleBoundaryCollision(width, height);
                     }
                 }
             }
@@ -766,19 +712,39 @@ public:
     }
 
     void run(int steps) {
+        auto start = std::chrono::system_clock::now();
+        auto step_start = start;
+        
         for (int current_step = 0; current_step < steps; ++current_step) {
             // Perform simulation step
             step();
 
             if (current_step % 50 == 0) {
+                auto time_now = std::chrono::system_clock::now();   
+                std::chrono::seconds time_elapsed = std::chrono::duration_cast<std::chrono::seconds>(time_now - step_start);
+                int minutes = time_elapsed.count() / 60;
+                int seconds = time_elapsed.count() % 60;
+
                 cout << "Step " << current_step << ": " << cells.size() << " cells";
-                cout << " | Deaths: " << stats.total_deaths << " | Leaving: " << stats.total_leaving << endl;
+                cout << " | Deaths: " << stats.total_deaths << " | Leaving: " << stats.total_leaving;
+                cout << " | Time elapsed: " << minutes << " minutes " << seconds << " seconds" << endl;
+
+                step_start = std::chrono::system_clock::now(); // Reset step_start here
             }
 
             // Write cell data to file for the current step
             writeCellDataToFile(current_step);
         }
+
+        auto end = std::chrono::system_clock::now();
+        std::chrono::seconds duration = std::chrono::duration_cast<std::chrono::seconds>(end - start);
+        int minutes = duration.count() / 60;
+        int seconds = duration.count() % 60;
+
         printStatistics();
+
+        cout << "\nTotal simulation time: " << minutes << " minutes " << seconds << " seconds\n" << endl;
+
     }
 };
 
