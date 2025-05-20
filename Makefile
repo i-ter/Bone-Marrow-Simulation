@@ -25,11 +25,13 @@ all: $(SIM) $(MOVIE_GEN)
 
 # Main simulation target
 $(SIM): $(SRCS) cell_config.h
-	$(CXX) $(CXXFLAGS) $(OMP_CFLAGS) $(SRCS) -o $(SIM) $(LDFLAGS) $(OMP_LDFLAGS)
+	$(CXX) $(CXXFLAGS) $(SRCS) -o $(SIM) $(LDFLAGS)
+# $(CXX) $(CXXFLAGS) $(OMP_CFLAGS) $(SRCS) -o $(SIM) $(LDFLAGS) $(OMP_LDFLAGS)
+
 
 # Movie generator target
 $(MOVIE_GEN): $(MOVIE_SRCS)
-	$(CXX) $(CXXFLAGS) $(OMP_CFLAGS) $(MOVIE_SRCS) -o $(MOVIE_GEN) $(LDFLAGS) $(OMP_LDFLAGS)
+	$(CXX) $(CXXFLAGS) $(MOVIE_SRCS) -o $(MOVIE_GEN) $(LDFLAGS)
 
 # Clean Rule (Removes the compiled files)
 clean:

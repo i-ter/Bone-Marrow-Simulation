@@ -10,12 +10,19 @@
 #include <sstream>
 #include <cmath>
 #include <cassert>
-#include <fstream>       // Add for file operations
-#include <algorithm>     // For std::remove, std::min, std::max
-#include "cell_config.h" // Import the cell configuration
-#include <chrono> // Add for timing
-#include <omp.h>
+#include <fstream>
+#include <algorithm>
+#include "cell_config.h"
+#include <chrono>
+#include <mutex>
 
+// OpenMP support with fallback. fallback runs single threaded, OpenMP not needed to be linked.
+#ifdef _OPENMP
+    #include <omp.h>
+#else  
+    inline int omp_get_max_threads() { return 1; }
+    inline int omp_get_thread_num() { return 0; }
+#endif
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -89,6 +96,7 @@ public:
     bool is_leaving = false;
     bool in_vessel_neighbourhood = false; // Flag to track if cell is currently inside a blood vessel
     int clone_id;
+    mutable std::mutex cell_mutex; // mutable allows the mutex to be modified even though the function is const
 
     void updateType(CellType type) {
         cell_type = type;
@@ -286,7 +294,7 @@ struct SpatialGrid
 
         return result;
     }
-    vector<Cell *> getValidNeighbours(const Cell *cell, int radius) {
+    vector<Cell *> getValidNeighbours(const Cell *cell, int search_radius) {
         vector<Cell *> result;
         auto potential_collisions = getPotentialCollisions(cell);
         for (auto &other : potential_collisions) {
@@ -295,7 +303,7 @@ struct SpatialGrid
                 continue;
             }
 
-            if (cell->distanceFrom(*other) <= radius) {
+            if (cell->distanceFrom(*other) <= search_radius) {
                 result.push_back(other);
             }
         }
@@ -557,9 +565,6 @@ public:
         // 1. Move cells
         auto move_cells_start = std::chrono::high_resolution_clock::now();
         for (auto &cell : cells) {
-            // diffusion movement handled by cell
-            // cell->move(width, height);
-
             // swapping cells with neighbours
             if (cell->should_swap()) {
                 // find a random neighbour
@@ -604,14 +609,19 @@ public:
         auto resolve_collision_start = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < num_inner_steps; ++i) {
 
-            for (auto &cell : cells) {
-                auto potential_collisions = spatial_grid.getPotentialCollisions(cell.get());
-                for (Cell *other : potential_collisions) {
-                    if (cell->collidesWith(*other)) {
-                        cell->resolveCollision(*other, 1, small_time_step);
-                        
-                        cell->handleBoundaryCollision(width, height);
-                        other->handleBoundaryCollision(width, height);
+            #pragma omp parallel for schedule(dynamic)
+            for (int idx = 0; idx < (int)cells.size(); ++idx) {
+                Cell* c1 = cells[idx].get();
+
+                auto potential_collisions = spatial_grid.getPotentialCollisions(c1);
+
+                for (Cell *c2 : potential_collisions) {
+                    if (c1->collidesWith(*c2)) {
+                        std::scoped_lock lock(c1->cell_mutex, c2->cell_mutex);
+
+                        c1->resolveCollision(*c2, 1, small_time_step);
+                        c1->handleBoundaryCollision(width, height);
+                        c2->handleBoundaryCollision(width, height);
                     }
                 }
             }
@@ -622,6 +632,7 @@ public:
 
         // 4. Cell division
         auto cell_division_start = std::chrono::high_resolution_clock::now();
+        #pragma omp parallel for schedule(dynamic)
         for (auto &cell : cells) {
             if (cell->should_divide()) {
                 assert(!(cell->is_dead || cell->is_leaving) && "Cell is dead or leaving. Something is wrong.");
@@ -637,8 +648,10 @@ public:
                 float new_x = cell->x + offset * cos(angle);
                 float new_y = cell->y + offset * sin(angle);
 
-                // set velocity to 0
-                new_cells.push_back(make_unique<Cell>(new_x, new_y, new_radius, new_type, cell->clone_id));
+                #pragma omp critical 
+                {
+                    new_cells.push_back(make_unique<Cell>(new_x, new_y, new_radius, new_type, cell->clone_id));
+                }
 
                 if (cell->getType() != HSC) {
                     // two daughter cells, each w own fate decision. modify original cell.
@@ -655,20 +668,38 @@ public:
 
         // 5. Check for cell death and leaving
         auto death_leaving_start = std::chrono::high_resolution_clock::now();
-        for (auto &cell : cells) {
-            // Check for cell death (all cell types)
+        
+        int num_threads = omp_get_max_threads();
+        std::vector<BoneMarrow::Stats> thread_stats(num_threads);
+
+        #pragma omp parallel for schedule(dynamic)
+        for (int idx = 0; idx < (int)cells.size(); ++idx) {
+            int tid = omp_get_thread_num();
+            Cell* cell = cells[idx].get();
+
             if (cell->should_die()) {
                 cell->is_dead = true;
-                stats.total_deaths++;
-                stats.deaths_by_type[cell->getType()]++;
-            }
-            // Check for cell leaving (only terminal cells)
-            else if (cell->should_leave()) {
+                thread_stats[tid].total_deaths++;
+                thread_stats[tid].deaths_by_type[cell->getType()]++;
+            } else if (cell->should_leave()) {
                 cell->is_leaving = true;
-                stats.total_leaving++;
-                stats.leaving_by_type[cell->getType()]++;
+                thread_stats[tid].total_leaving++;
+                thread_stats[tid].leaving_by_type[cell->getType()]++;
             }
         }
+
+        // After the parallel region, merge thread_stats into stats
+        for (const auto& tstat : thread_stats) {
+            stats.total_deaths += tstat.total_deaths;
+            stats.total_leaving += tstat.total_leaving;
+            for (const auto& [type, count] : tstat.deaths_by_type) {
+                stats.deaths_by_type[type] += count;
+            }
+            for (const auto& [type, count] : tstat.leaving_by_type) {
+                stats.leaving_by_type[type] += count;
+            }
+        }
+
         auto death_leaving_end = std::chrono::high_resolution_clock::now();
         timings["death_leaving"] = death_leaving_end - death_leaving_start;
 
@@ -698,8 +729,7 @@ public:
     }
 
     // Write cell data to file
-    void writeCellDataToFile(int step_num)
-    {
+    void writeCellDataToFile(int step_num) {
         // Write data for each cell
         for (const auto &cell : cells) {
             bool status = cell->is_dead || cell->is_leaving;
@@ -768,7 +798,7 @@ public:
                     if (!latest_step_timings.empty()) {
                         cout << "\nTimings (ms): ";
                         for(const auto& pair : latest_step_timings) {
-                            cout << pair.first << ": " << fixed << setprecision(2) << pair.second.count() << " ";
+                            cout << pair.first << ": " << fixed << setprecision(3) << pair.second.count() << endl;
                         }
                     }
                     cout << "\n\n" << endl;
