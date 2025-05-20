@@ -13,6 +13,9 @@
 #include <fstream>       // Add for file operations
 #include <algorithm>     // For std::remove, std::min, std::max
 #include "cell_config.h" // Import the cell configuration
+#include <chrono> // Add for timing
+#include <omp.h>
+
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -21,10 +24,7 @@ std::random_device rd;
 std::mt19937 gen(rd());
 std::uniform_real_distribution<> unif_01(0, 1);
 std::uniform_real_distribution<float> angle_dist(0, 2 * M_PI);
-// std::uniform_real_distribution<float> angle_change(-0.5, 0.5);
 std::normal_distribution<float> normal_dist(0, 1);
-// uniform_real_distribution<float> vessel_length_dist(100, 600);  // Blood vessel length distribution
-// uniform_real_distribution<float> vessel_radius_dist(20.0, 50);    // Blood vessel radius distribution
 
 class BloodVessel
 {
@@ -332,6 +332,7 @@ public:
     ofstream vesselDataFile;       // File for blood vessel data
     ofstream paramsFile;           // File for simulation parameters
     bool cold_start;
+    std::map<std::string, std::chrono::duration<double, std::milli>> latest_step_timings;
 
     SpatialGrid spatial_grid;
 
@@ -539,15 +540,22 @@ public:
     }
 
     void step() {
+        auto step_total_start = std::chrono::high_resolution_clock::now();
+        std::map<std::string, std::chrono::duration<double, std::milli>> timings;
+
         vector<unique_ptr<Cell>> new_cells;
 
         // 0. setup spatial grid for efficient handling of cell neighbourhood
+        auto grid_setup_start = std::chrono::high_resolution_clock::now();
         spatial_grid.clear();
         for (auto &cell : cells) {
             spatial_grid.insert(cell.get());
         }
+        auto grid_setup_end = std::chrono::high_resolution_clock::now();
+        timings["grid_setup"] = grid_setup_end - grid_setup_start;
 
         // 1. Move cells
+        auto move_cells_start = std::chrono::high_resolution_clock::now();
         for (auto &cell : cells) {
             // diffusion movement handled by cell
             // cell->move(width, height);
@@ -572,8 +580,11 @@ public:
                 }
             }
         }
+        auto move_cells_end = std::chrono::high_resolution_clock::now();
+        timings["move_cells"] = move_cells_end - move_cells_start;
 
         // 2. Handle blood vessel collisions
+        auto vessel_collision_start = std::chrono::high_resolution_clock::now();
         for (auto &cell : cells) {
             cell->in_vessel_neighbourhood = false;
             for (const auto &vessel : blood_vessels){
@@ -583,11 +594,14 @@ public:
                 }
             }
         }
+        auto vessel_collision_end = std::chrono::high_resolution_clock::now();
+        timings["vessel_collision"] = vessel_collision_end - vessel_collision_start;
 
         float small_time_step = 0.1; // 1 min
         int num_inner_steps = 10; // big loop is 10 mins
 
         // 3. Check for collisions and resolve them
+        auto resolve_collision_start = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < num_inner_steps; ++i) {
 
             for (auto &cell : cells) {
@@ -603,7 +617,11 @@ public:
             }
         }
 
+        auto resolve_collision_end = std::chrono::high_resolution_clock::now();
+        timings["resolve_collision"] = resolve_collision_end - resolve_collision_start;
+
         // 4. Cell division
+        auto cell_division_start = std::chrono::high_resolution_clock::now();
         for (auto &cell : cells) {
             if (cell->should_divide()) {
                 assert(!(cell->is_dead || cell->is_leaving) && "Cell is dead or leaving. Something is wrong.");
@@ -632,8 +650,11 @@ public:
                 }
             }
         }
+        auto cell_division_end = std::chrono::high_resolution_clock::now();
+        timings["cell_division"] = cell_division_end - cell_division_start;
 
         // 5. Check for cell death and leaving
+        auto death_leaving_start = std::chrono::high_resolution_clock::now();
         for (auto &cell : cells) {
             // Check for cell death (all cell types)
             if (cell->should_die()) {
@@ -648,18 +669,32 @@ public:
                 stats.leaving_by_type[cell->getType()]++;
             }
         }
+        auto death_leaving_end = std::chrono::high_resolution_clock::now();
+        timings["death_leaving"] = death_leaving_end - death_leaving_start;
 
         // Remove dead and leaving cells from the simulation
+        auto remove_inactive_start = std::chrono::high_resolution_clock::now();
         auto isCellInactive = [](const unique_ptr<Cell> &cell) {
             return cell->is_dead || cell->is_leaving;
         };
         auto newEnd = remove_if(cells.begin(), cells.end(), isCellInactive);
         cells.erase(newEnd, cells.end());
+        auto remove_inactive_end = std::chrono::high_resolution_clock::now();
+        timings["remove_inactive"] = remove_inactive_end - remove_inactive_start;
 
         // Add new cells
+        auto add_new_cells_start = std::chrono::high_resolution_clock::now();
         for (auto &new_cell : new_cells) {
             cells.push_back(std::move(new_cell));
         }
+        auto add_new_cells_end = std::chrono::high_resolution_clock::now();
+        timings["add_new_cells"] = add_new_cells_end - add_new_cells_start;
+
+        auto step_total_end = std::chrono::high_resolution_clock::now();
+        timings["step_total"] = step_total_end - step_total_start;
+
+        // Store timings for later printing
+        latest_step_timings = timings;
     }
 
     // Write cell data to file
@@ -713,7 +748,7 @@ public:
 
     void run(int steps) {
         auto start = std::chrono::system_clock::now();
-        auto step_start = start;
+        auto step_start_time = start; // Renamed to avoid conflict
         
         for (int current_step = 0; current_step < steps; ++current_step) {
             // Perform simulation step
@@ -721,15 +756,24 @@ public:
 
             if (current_step % 50 == 0) {
                 auto time_now = std::chrono::system_clock::now();   
-                std::chrono::seconds time_elapsed = std::chrono::duration_cast<std::chrono::seconds>(time_now - step_start);
-                int minutes = time_elapsed.count() / 60;
-                int seconds = time_elapsed.count() % 60;
+                std::chrono::seconds time_elapsed_total = std::chrono::duration_cast<std::chrono::seconds>(time_now - step_start_time);
+                int minutes = time_elapsed_total.count() / 60;
+                int seconds = time_elapsed_total.count() % 60;
 
                 cout << "Step " << current_step << ": " << cells.size() << " cells";
                 cout << " | Deaths: " << stats.total_deaths << " | Leaving: " << stats.total_leaving;
-                cout << " | Time elapsed: " << minutes << " minutes " << seconds << " seconds" << endl;
-
-                step_start = std::chrono::system_clock::now(); // Reset step_start here
+                cout << " | Iter time: " << minutes << "m " << seconds << "s";
+                
+                if (true) {
+                    if (!latest_step_timings.empty()) {
+                        cout << "\nTimings (ms): ";
+                        for(const auto& pair : latest_step_timings) {
+                            cout << pair.first << ": " << fixed << setprecision(2) << pair.second.count() << " ";
+                        }
+                    }
+                    cout << "\n\n" << endl;
+                }
+                step_start_time = std::chrono::system_clock::now(); // Reset step_start_time here
             }
 
             // Write cell data to file for the current step
