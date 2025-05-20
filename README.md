@@ -18,17 +18,17 @@ make all
 
 ## Generate Visualization
 
-After running the simulation, you can generate a movie from the saved frames:
+After running the simulation, you can generate a movie with the following command:
 
 ```bash
 ./gen_movie_main [options]
 ```
 
-Output frames are saved in the `frames` directory and movies in the `movies` directory.
+Output frames are saved in the `frames` directory and movies in the `movies` directory. It uses the SFML library to render the frames.
 
 ## Design
 
-The simulation is implemented in C++ and uses the SFML library for rendering. The main classes are:
+The main classes are:
 
 - `BoneMarrow`: Main class that simulates the bone marrow.
 - `Cell`: Class that represents a cell.
