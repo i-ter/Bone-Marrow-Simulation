@@ -1,6 +1,17 @@
 # Bone Marrow Simulation
 
-A particle simulation of cells inside the bone marrow. This simulation models the movement and interactions of cells within the bone marrow. It is parallelized using OpenMP.
+A parallelized particle-based simulation of cellular dynamics within the bone marrow.
+
+## Overview
+
+This project simulates the behavior and interactions of hematopoietic cells in the bone marrow of a mouse. Key features include:
+
+- Cell motility: Cells move throughout the 2D bone marrow space
+- Volume exclusion: Inter-cell collisions modeled via Hookean (spring) potentials
+- Full hematopoietic lineage: Realistic modeling of division along the complete hematopoietic lineage tree
+- Cell exit and death: Cells can leave the marrow through blood vessels or die, reflecting physiological turnover
+
+This simulation provides a computational framework for studying spatial organization and lineage dynamics of hematopoietic cells in a biologically relevant context. The main time-step of the simulation is 10 mins while pairwise interactions are considered every 1 min. 
 
 ## Build Instructions
 
