@@ -85,6 +85,10 @@ public:
 
 class Cell 
 {
+private:
+    unsigned int id; // unique cell id
+    static unsigned int next_id; // static counter for unique IDs
+
 protected:
     CellType cell_type;
 
@@ -95,7 +99,7 @@ public:
     bool is_dead = false;
     bool is_leaving = false;
     bool in_vessel_neighbourhood = false; // Flag to track if cell is currently inside a blood vessel
-    int clone_id;
+    int clone_id=-100;
     mutable std::mutex cell_mutex; // mutable allows the mutex to be modified even though the function is const
 
     void updateType(CellType type) {
@@ -104,11 +108,15 @@ public:
     }
 
     Cell(float x, float y, float radius, CellType type, int clone_id)
-        : cell_type(type), x(x), y(y), radius(radius), clone_id(clone_id) {}
+        : cell_type(type), x(x), y(y), radius(radius), clone_id(clone_id) {
+        id = next_id++;
+    }
 
     ~Cell() {}
 
-    const CellType &getType() const {
+    int getId() const { return id; }
+
+    CellType getType() const {
         return cell_type;
     }
 
@@ -233,6 +241,8 @@ public:
         return unif_01(gen) < get_with_default(MOTILITY, cell_type, DEFAULT_CELL_MOTILITY);
     }
 };
+
+unsigned int Cell::next_id = 0;
 
 // Spatial partitioning for collision detection optimization
 struct SpatialGrid
@@ -405,7 +415,7 @@ public:
         // Initialize consolidated data file
         string consolidatedFilename = dataDir + "/" + sim_name + "_all_steps.csv";
         consolidatedDataFile.open(consolidatedFilename);
-        consolidatedDataFile << "step,cell_type,x,y,dx,dy,clone_id,vessel_neighbourhood,status" << endl;
+        consolidatedDataFile << "step,cell_type,x,y,dx,dy,clone_id,vessel_neighbourhood,status,cell_id" << endl;
 
         if (cold_start)
         {
@@ -425,7 +435,6 @@ public:
 
             for (auto &[type, num] : INITIAL_CELL_NUMBERS)
             {
-                num /= 3;
                 for (int i = 0; i < num; ++i)
                 {
                     float x = static_cast<float>(unif_01(gen) * width);
@@ -547,6 +556,25 @@ public:
         neighbour->y = temp_y;
     }
 
+    CellType sampleRandomType(const CellType &type) {
+        const auto &possible_types = LINEAGE_TREE.at(type);
+        
+        if (possible_types.size() == 1) {
+            return possible_types[0].first;
+        }
+
+        float r = unif_01(gen);
+        float cumulative_prob = 0.0f;
+        
+        for (const auto &[type, prob]: possible_types) {
+            cumulative_prob += prob;
+            if (r < cumulative_prob) {
+                return type;
+            }
+        }
+        throw std::runtime_error("Failed to sample random type");
+    }
+
     void step() {
         auto step_total_start = std::chrono::high_resolution_clock::now();
         std::map<std::string, std::chrono::duration<double, std::milli>> timings;
@@ -610,7 +638,7 @@ public:
         for (int i = 0; i < num_inner_steps; ++i) {
 
             #pragma omp parallel for schedule(dynamic)
-            for (int idx = 0; idx < (int)cells.size(); ++idx) {
+            for (size_t idx = 0; idx < cells.size(); ++idx) {
                 Cell* c1 = cells[idx].get();
 
                 auto potential_collisions = spatial_grid.getPotentialCollisions(c1);
@@ -636,10 +664,9 @@ public:
         for (auto &cell : cells) {
             if (cell->should_divide()) {
                 assert(!(cell->is_dead || cell->is_leaving) && "Cell is dead or leaving. Something is wrong.");
-
-                auto &possible_types = LINEAGE_TREE.at(cell->getType());
-                CellType new_type = possible_types[std::rand() % possible_types.size()];
-
+                
+                CellType new_type = sampleRandomType(cell->getType());
+                
                 float new_radius = get_with_default(CELL_RADII, new_type, DEFAULT_CELL_RADII);
                 float offset = cell->radius + new_radius;
                 float angle = angle_dist(gen);
@@ -655,11 +682,7 @@ public:
 
                 if (cell->getType() != HSC) {
                     // two daughter cells, each w own fate decision. modify original cell.
-                    if (possible_types.size() == 2) {
-                        cell->updateType(possible_types[std::rand() % possible_types.size()]);
-                    } else {
-                        cell->updateType(new_type);
-                    }
+                    cell->updateType(sampleRandomType(cell->getType()));
                 }
             }
         }
@@ -673,7 +696,7 @@ public:
         std::vector<BoneMarrow::Stats> thread_stats(num_threads);
 
         #pragma omp parallel for schedule(dynamic)
-        for (int idx = 0; idx < (int)cells.size(); ++idx) {
+        for (size_t idx = 0; idx < cells.size(); ++idx) {
             int tid = omp_get_thread_num();
             Cell* cell = cells[idx].get();
 
@@ -743,7 +766,8 @@ public:
                                  << fixed << setprecision(4) << cell->dy << ","
                                  << cell->clone_id << ","
                                  << cell->in_vessel_neighbourhood << ","
-                                 << status << endl;
+                                 << status << ","
+                                 << cell->getId() << endl;
         }
     }
 
@@ -796,14 +820,14 @@ public:
                 
                 if (true) {
                     if (!latest_step_timings.empty()) {
-                        cout << "\nTimings (ms): ";
+                        cout << "\nTimings (ms):" << endl;
                         for(const auto& pair : latest_step_timings) {
                             cout << pair.first << ": " << fixed << setprecision(3) << pair.second.count() << endl;
                         }
                     }
                     cout << "\n\n" << endl;
                 }
-                step_start_time = std::chrono::system_clock::now(); // Reset step_start_time here
+                step_start_time = std::chrono::system_clock::now();
             }
 
             // Write cell data to file for the current step
@@ -886,6 +910,11 @@ int main(int argc, char *argv[])
     cout << "  Steps: " << steps << "\n";
     cout << "  Simulation name: " << sim_name << "\n\n";
     cout << "  Cold start: " << cold_start << "\n\n";
+    #ifdef _OPENMP
+        cout << "OpenMP is supported" << endl;
+    #else
+        cout << "OpenMP is not supported" << endl;
+    #endif
 
     BoneMarrow model(width, height, initial_cells, sim_name, num_vessels, cold_start);
     model.run(steps);
