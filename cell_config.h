@@ -12,6 +12,8 @@ constexpr float MAX_SPEED = 1.0f;
 constexpr float VESSEL_DISTANCE_THRESHOLD = 20.0f;
 constexpr float VESSEL_LEAVING_MULTIPLIER = 10.0f;
 constexpr float CXCL_DENSITY_PER_100_AREA = 6.0f;
+constexpr int MAX_CELLS = 3500;
+constexpr int SPATIAL_GRID_BLOCK_SIZE = 15;
 
 // consdier the time step to be 10 mins
 constexpr float TIME_UNITS_PER_DAY = 144.0f; 
@@ -57,7 +59,6 @@ enum CellType {
     Lymphocyte8,
     Lymphocyte9,
     Lymphocyte10,
-    Lymphocyte11,
     Bcell,
     STROMA,
 };
@@ -75,7 +76,7 @@ inline const std::unordered_map<CellType, std::vector<std::pair<CellType, float>
     {MPP2, {{MPP3, 1.0f}}},
     {MPP3, {{MPP4, 1.0f}}},
     {MPP4, {{MPP5, 1.0f}}},
-    {MPP5, {{CMP, 0.9f}, {CLP, 0.1f}}},
+    {MPP5, {{CMP, 0.95f}, {CLP, 0.05f}}},
     {CMP, {{MEP, 0.6f}, {GMP, 0.4f}}},
     {MEP, {{Megakaryocyte, 0.1f}, {Erythroblast1, 0.9f}}},
     // {Megakaryocyte, {Platelet}}, // megas just release platelets into blood stream
@@ -105,8 +106,7 @@ inline const std::unordered_map<CellType, std::vector<std::pair<CellType, float>
     {Lymphocyte7, {{Lymphocyte8, 1.0f}}},
     {Lymphocyte8, {{Lymphocyte9, 1.0f}}},
     {Lymphocyte9, {{Lymphocyte10, 1.0f}}},
-    {Lymphocyte10, {{Lymphocyte11, 1.0f}}},
-    {Lymphocyte11, {{Bcell, 1.0f}}},
+    {Lymphocyte10, {{Bcell, 1.0f}}},
 };
 
 constexpr float DEFAULT_CELL_RADII = 4.0f;
@@ -119,7 +119,7 @@ inline const std::unordered_map<CellType, float> CELL_RADII = {
 };
 
 // per day division probability divided by time step
-constexpr float DEFAULT_DIVISION_PROB = 0.5f / TIME_UNITS_PER_DAY;
+constexpr float DEFAULT_DIVISION_PROB = 1.0f / TIME_UNITS_PER_DAY;
 // unordered_map for cell division probabilities
 inline const std::unordered_map<CellType, float> DIVISION_PROB = {
     {HSC, 0.3f / TIME_UNITS_PER_DAY},
@@ -135,10 +135,10 @@ inline const std::unordered_map<CellType, float> DIVISION_PROB = {
 
 // unordered_map for cell leaving probabilities
 inline const std::unordered_map<CellType, float> LEAVE_PROB = {
-    {RBC, 1.1f/TIME_UNITS_PER_DAY},
+    {RBC, 1.17f/TIME_UNITS_PER_DAY},
     {Platelet, 0.0f},
-    {Bcell, 0.32f/TIME_UNITS_PER_DAY},
-    {Myeloid, 0.92f/TIME_UNITS_PER_DAY},
+    {Bcell, 0.65f/TIME_UNITS_PER_DAY},
+    {Myeloid, 0.8f/TIME_UNITS_PER_DAY},
     {Megakaryocyte, 0.24f/TIME_UNITS_PER_DAY},
 };
 
@@ -207,7 +207,6 @@ inline const std::unordered_map<CellType, std::tuple<int, int, int>> CELL_COLORS
     {Lymphocyte8, {128, 0, 128}},  // Purple
     {Lymphocyte9, {128, 0, 128}},  // Purple
     {Lymphocyte10, {128, 0, 128}},  // Purple
-    {Lymphocyte11, {128, 0, 128}},  // Purple
     {Bcell, {75, 0, 130}},         // Indigo
 
     // Megakaryocyte/Platelet (Yellow/Gold)
@@ -218,49 +217,6 @@ inline const std::unordered_map<CellType, std::tuple<int, int, int>> CELL_COLORS
     {STROMA, {169, 169, 169}},      // DarkGray
 };
 
-// // 500 x 500 micron grid
-// inline std::unordered_map<CellType, float> INITIAL_CELL_NUMBERS = {
-//     {HSC, 1},
-//     {MPP1, 2},
-//     {MPP2, 4},
-//     {MPP3, 8},
-//     {MPP4, 16},  
-//     {MPP5, 32},
-//     {CMP, 10},
-//     {CLP, 5},
-//     {MEP, 10},
-//     {GMP, 10},
-//     {Erythroblast1, 15},
-//     {Erythroblast2, 30},
-//     {Erythroblast3, 60},
-//     {Erythroblast4, 120},
-//     {Erythroblast5, 240},
-//     {Erythroblast6, 480},
-//     {Erythroblast7, 960},
-//     {Erythroblast8, 1920},
-//     {RBC, 100},
-//     {Myeloblast1, 10},
-//     {Myeloblast2, 20},
-//     {Myeloblast3, 40},
-//     {Myeloblast4, 80},
-//     {Myeloblast5, 160},
-//     {Myeloblast6, 320},
-//     {Myeloblast7, 640},
-//     {Myeloid, 1500},
-//     {Megakaryocyte, 10},
-//     {Lymphocyte1, 6},
-//     {Lymphocyte2, 12},
-//     {Lymphocyte3, 24},
-//     {Lymphocyte4, 48},
-//     {Lymphocyte5, 96},
-//     {Lymphocyte6, 192},
-//     {Lymphocyte7, 384},
-//     {Lymphocyte8, 700},
-//     {Lymphocyte9, 800},
-//     {Lymphocyte10, 900},
-//     {Lymphocyte11, 1000},
-//     {Bcell, 768},
-// };
 // 500 x 500 micron grid
 inline std::unordered_map<CellType, float> INITIAL_CELL_NUMBERS = {
     {HSC, 1},
@@ -271,7 +227,7 @@ inline std::unordered_map<CellType, float> INITIAL_CELL_NUMBERS = {
     {MPP5, 1},
     {CMP, 3},
     {CLP, 1},
-    {MEP, 5},
+    {MEP, 4},
     {GMP, 3},
     {Erythroblast1, 5},
     {Erythroblast2, 10},
@@ -281,7 +237,7 @@ inline std::unordered_map<CellType, float> INITIAL_CELL_NUMBERS = {
     {Erythroblast6, 160},
     {Erythroblast7, 320},
     {Erythroblast8, 640},
-    {RBC, 1280},
+    {RBC, 800},
     {Myeloblast1, 3},
     {Myeloblast2, 6},
     {Myeloblast3, 12},
@@ -291,18 +247,17 @@ inline std::unordered_map<CellType, float> INITIAL_CELL_NUMBERS = {
     {Myeloblast7, 192},
     {Myeloid, 400},
     {Megakaryocyte, 3},
-    {Lymphocyte1, 0},
+    {Lymphocyte1, 1},
     {Lymphocyte2, 1},
-    {Lymphocyte3, 2},
-    {Lymphocyte4, 4},
-    {Lymphocyte5, 8},
-    {Lymphocyte6, 16},
-    {Lymphocyte7, 30},
-    {Lymphocyte8, 60},
-    {Lymphocyte9, 100},
-    {Lymphocyte10, 150},
-    {Lymphocyte11, 200},
-    {Bcell, 250},
+    {Lymphocyte3, 1},
+    {Lymphocyte4, 3},
+    {Lymphocyte5, 5},
+    {Lymphocyte6, 10},
+    {Lymphocyte7, 20},
+    {Lymphocyte8, 40},
+    {Lymphocyte9, 80},
+    {Lymphocyte10, 160},
+    {Bcell, 320},
 };
 
 

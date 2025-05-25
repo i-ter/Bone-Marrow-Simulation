@@ -100,6 +100,7 @@ public:
     bool is_leaving = false;
     bool in_vessel_neighbourhood = false; // Flag to track if cell is currently inside a blood vessel
     int clone_id=-100;
+    int grid_x, grid_y;
     mutable std::mutex cell_mutex; // mutable allows the mutex to be modified even though the function is const
 
     void updateType(CellType type) {
@@ -222,6 +223,8 @@ public:
     }
 
     bool should_divide() {
+
+
         return unif_01(gen) < get_with_default(DIVISION_PROB, cell_type, DEFAULT_DIVISION_PROB);
     }
 
@@ -250,20 +253,24 @@ struct SpatialGrid
     float block_size;
     int grid_width, grid_height;
     vector<vector<vector<Cell *>>> grid; // grid[x][y] returns a vector of cells in block (x,y)
+    vector<vector<int>> grid_block_cell_counts;
+    float grid_block_density_limit;
 
     SpatialGrid(float width, float height, float block_size) : block_size(block_size)
     {
         grid_width = ceil(width / block_size);
         grid_height = ceil(height / block_size);
         grid.resize(grid_width, vector<vector<Cell *>>(grid_height));
+        grid_block_cell_counts.resize(grid_width, vector<int>(grid_height, 0));
+        // grid_block_density_limit = (block_size * block_size *0.9) / (M_PI * 5 * 5);
+        grid_block_density_limit = (block_size * block_size ) /(5 * 5);
     }
+
 
     void clear()
     {
-        for (auto &col : grid)
-        {
-            for (auto &block : col)
-            {
+        for (auto &col : grid) {
+            for (auto &block : col) {
                 block.clear();
             }
         }
@@ -274,20 +281,32 @@ struct SpatialGrid
         int grid_x = min(grid_width - 1, max(0, static_cast<int>(cell->x / block_size)));
         int grid_y = min(grid_height - 1, max(0, static_cast<int>(cell->y / block_size)));
         grid[grid_x][grid_y].push_back(cell);
+        cell->grid_x = grid_x;
+        cell->grid_y = grid_y;
     }
+
+    void calculateGridBlockCellCounts() {
+        for (int i = 0; i < grid_width; i++) {
+            for (int j = 0; j < grid_height; j++) {
+                grid_block_cell_counts[i][j] = grid[i][j].size();
+            }
+        }
+    }
+
+    bool isGridBlockOvercrowded(const int &x, const int &y) {
+        return grid_block_cell_counts[x][y] > grid_block_density_limit;
+    }
+
 
     vector<Cell *> getPotentialCollisions(const Cell *cell) {
         vector<Cell *> result;
-        int grid_x = static_cast<int>(cell->x / block_size);
-        int grid_y = static_cast<int>(cell->y / block_size);
-
         // Check cell's grid cell and neighboring cells
         for (int dx = -1; dx <= 1; dx++)
         {
             for (int dy = -1; dy <= 1; dy++)
             {
-                int nx = grid_x + dx;
-                int ny = grid_y + dy;
+                int nx = cell->grid_x + dx;
+                int ny = cell->grid_y + dy;
 
                 if (nx >= 0 && nx < grid_width && ny >= 0 && ny < grid_height)
                 {
@@ -369,7 +388,7 @@ public:
           num_vessels(num_vessels),
           sim_name(sim_name),
           cold_start(cold_start),
-          spatial_grid(width, height, 8.0)
+          spatial_grid(width, height, SPATIAL_GRID_BLOCK_SIZE)
     {
         if (!fs::exists(dataDir))
         {
@@ -587,6 +606,7 @@ public:
         for (auto &cell : cells) {
             spatial_grid.insert(cell.get());
         }
+        spatial_grid.calculateGridBlockCellCounts();
         auto grid_setup_end = std::chrono::high_resolution_clock::now();
         timings["grid_setup"] = grid_setup_end - grid_setup_start;
 
@@ -662,7 +682,7 @@ public:
         auto cell_division_start = std::chrono::high_resolution_clock::now();
         #pragma omp parallel for schedule(dynamic)
         for (auto &cell : cells) {
-            if (cell->should_divide()) {
+            if (cell->should_divide() && !spatial_grid.isGridBlockOvercrowded(cell->grid_x, cell->grid_y)) {
                 assert(!(cell->is_dead || cell->is_leaving) && "Cell is dead or leaving. Something is wrong.");
                 
                 CellType new_type = sampleRandomType(cell->getType());
@@ -802,9 +822,11 @@ public:
 
     void run(int steps) {
         auto start = std::chrono::system_clock::now();
-        auto step_start_time = start; // Renamed to avoid conflict
+        auto step_start_time = start;
+
+        writeCellDataToFile(0);
         
-        for (int current_step = 0; current_step < steps; ++current_step) {
+        for (int current_step = 1; current_step < steps+1; ++current_step) {
             // Perform simulation step
             step();
 
@@ -849,13 +871,13 @@ public:
 int main(int argc, char *argv[])
 {
     // Default values
-    float width = 50.0;
-    float height = 50.0;
+    float width = 500.0;
+    float height = 500.0;
     int initial_cells = 20;
     int steps = 100;
     string sim_name = "bm_sim";
     int num_vessels = 10; // Default number of blood vessels
-    bool cold_start = true;
+    bool cold_start = false;
 
     // Parse command-line arguments
     if (argc > 1) {
