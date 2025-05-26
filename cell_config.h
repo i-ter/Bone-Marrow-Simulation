@@ -124,8 +124,8 @@ constexpr float DEFAULT_DIVISION_PROB = 1.0f / TIME_UNITS_PER_DAY;
 inline const std::unordered_map<CellType, float> DIVISION_PROB = {
     {HSC, 0.3f / TIME_UNITS_PER_DAY},
     {MPP5, 2.0f / TIME_UNITS_PER_DAY},
-    {CMP, 2.0f / TIME_UNITS_PER_DAY}, // RPP1
-    {MEP, 2.0f / TIME_UNITS_PER_DAY}, // RPP2
+    {CMP, 2.0f / TIME_UNITS_PER_DAY},
+    {MEP, 2.0f / TIME_UNITS_PER_DAY},
     {Bcell, 0.0f},
     {Myeloid, 0.0f},
     {RBC, 0.0f},
@@ -142,16 +142,18 @@ inline const std::unordered_map<CellType, float> LEAVE_PROB = {
     {Megakaryocyte, 0.24f/TIME_UNITS_PER_DAY},
 };
 
-// unordered_map for cell death probabilities
+
 inline const std::unordered_map<CellType, float> CELL_DEATH_PROB = {
 };
 
 
-constexpr float DEFAULT_CELL_MOTILITY = 0.0f;
+constexpr float DEFAULT_CELL_MOTILITY = 0.1f;
 
-// unordered_map for cell motility
 inline const std::unordered_map<CellType, float> MOTILITY = {
     {STROMA, 0.0f},
+};
+
+inline const std::unordered_map<CellType, float> SWAP_MOTILITY = {
     {HSC, 0.5f},
     {MPP1, 0.5f},
     {MPP2, 0.5f},
@@ -161,6 +163,7 @@ inline const std::unordered_map<CellType, float> MOTILITY = {
     {MEP, 0.5f},
     {GMP, 0.5f},
 };
+
 
 inline const std::unordered_map<CellType, std::tuple<int, int, int>> CELL_COLORS = {
     // HSC/MPP lineage (Red-Orange)
@@ -237,7 +240,7 @@ inline std::unordered_map<CellType, float> INITIAL_CELL_NUMBERS = {
     {Erythroblast6, 160},
     {Erythroblast7, 320},
     {Erythroblast8, 640},
-    {RBC, 800},
+    {RBC, 300},
     {Myeloblast1, 3},
     {Myeloblast2, 6},
     {Myeloblast3, 12},
@@ -245,7 +248,7 @@ inline std::unordered_map<CellType, float> INITIAL_CELL_NUMBERS = {
     {Myeloblast5, 48},
     {Myeloblast6, 96},
     {Myeloblast7, 192},
-    {Myeloid, 400},
+    {Myeloid, 130},
     {Megakaryocyte, 3},
     {Lymphocyte1, 1},
     {Lymphocyte2, 1},
@@ -257,7 +260,7 @@ inline std::unordered_map<CellType, float> INITIAL_CELL_NUMBERS = {
     {Lymphocyte8, 40},
     {Lymphocyte9, 80},
     {Lymphocyte10, 160},
-    {Bcell, 320},
+    {Bcell, 130},
 };
 
 

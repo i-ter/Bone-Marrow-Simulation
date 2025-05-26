@@ -241,7 +241,7 @@ public:
     
     // if true, cell will swap with a random neighbour. 
     bool should_swap() {
-        return unif_01(gen) < get_with_default(MOTILITY, cell_type, DEFAULT_CELL_MOTILITY);
+        return unif_01(gen) < get_with_zero(SWAP_MOTILITY, cell_type);
     }
 };
 
@@ -262,8 +262,8 @@ struct SpatialGrid
         grid_height = ceil(height / block_size);
         grid.resize(grid_width, vector<vector<Cell *>>(grid_height));
         grid_block_cell_counts.resize(grid_width, vector<int>(grid_height, 0));
-        // grid_block_density_limit = (block_size * block_size *0.9) / (M_PI * 5 * 5);
-        grid_block_density_limit = (block_size * block_size ) /(5 * 5);
+        grid_block_density_limit = (block_size * block_size * 0.9) / (M_PI * 5 * 5);
+        // grid_block_density_limit = 5;
     }
 
 
@@ -297,6 +297,23 @@ struct SpatialGrid
         return grid_block_cell_counts[x][y] > grid_block_density_limit;
     }
 
+    bool isGridBlockNeighbourOvercrowded(const int &x, const int &y) {
+        int valid_blocks = 0;
+        int overcrowded_blocks = 0;
+        for (int dx = -1; dx <= 1; ++dx) {
+            for (int dy = -1; dy <= 1; ++dy) {
+                int nx = x + dx;
+                int ny = y + dy;
+                if (nx >= 0 && nx < grid_width && ny >= 0 && ny < grid_height) {
+                    ++valid_blocks;
+                    if (isGridBlockOvercrowded(nx, ny)) {
+                        ++overcrowded_blocks;
+                    }
+                }
+            }
+        }
+        return overcrowded_blocks > valid_blocks / 2;
+    }
 
     vector<Cell *> getPotentialCollisions(const Cell *cell) {
         vector<Cell *> result;
@@ -390,8 +407,7 @@ public:
           cold_start(cold_start),
           spatial_grid(width, height, SPATIAL_GRID_BLOCK_SIZE)
     {
-        if (!fs::exists(dataDir))
-        {
+        if (!fs::exists(dataDir)) {
             fs::create_directory(dataDir);
         }
 
@@ -419,8 +435,7 @@ public:
         paramsFile << "cell_type,radius,division_probability,death_probability,leave_probability,motility,initial_number" << endl;
 
         // Write cell type specific parameters
-        for (const auto &[type, _] : LINEAGE_TREE)
-        {
+        for (const auto &[type, _] : LINEAGE_TREE) {
             paramsFile << getCellTypeName(type) << ","
                        << get_with_default(CELL_RADII, type, DEFAULT_CELL_RADII) << ","
                        << get_with_default(DIVISION_PROB, type, DEFAULT_DIVISION_PROB) << ","
@@ -436,8 +451,7 @@ public:
         consolidatedDataFile.open(consolidatedFilename);
         consolidatedDataFile << "step,cell_type,x,y,dx,dy,clone_id,vessel_neighbourhood,status,cell_id" << endl;
 
-        if (cold_start)
-        {
+        if (cold_start) {
             cout << "--- COLD STARTING THE SIMULATION ---" << endl;
             for (int i = 0; i < initial_cells; ++i)
             {
@@ -445,17 +459,13 @@ public:
                 float y = static_cast<float>(unif_01(gen) * height);
                 cells.push_back(make_unique<Cell>(x, y, get_with_default(CELL_RADII, HSC, DEFAULT_CELL_RADII), HSC, i));
             }
-        }
-        else
-        {
+        } else {
 
             int starting_cells = 0;
             int HSPC_num = 0; // tag HSPC cells with clone_id
 
-            for (auto &[type, num] : INITIAL_CELL_NUMBERS)
-            {
-                for (int i = 0; i < num; ++i)
-                {
+            for (auto &[type, num] : INITIAL_CELL_NUMBERS) {
+                for (int i = 0; i < num; ++i) {
                     float x = static_cast<float>(unif_01(gen) * width);
                     float y = static_cast<float>(unif_01(gen) * height);
                     float radius = get_with_default(CELL_RADII, type, DEFAULT_CELL_RADII);
@@ -632,6 +642,7 @@ public:
                     spatial_grid.insert(random_neighbour);
                 }
             }
+            cell->move(width, height);
         }
         auto move_cells_end = std::chrono::high_resolution_clock::now();
         timings["move_cells"] = move_cells_end - move_cells_start;
@@ -682,7 +693,7 @@ public:
         auto cell_division_start = std::chrono::high_resolution_clock::now();
         #pragma omp parallel for schedule(dynamic)
         for (auto &cell : cells) {
-            if (cell->should_divide() && !spatial_grid.isGridBlockOvercrowded(cell->grid_x, cell->grid_y)) {
+            if (cell->should_divide() && !spatial_grid.isGridBlockNeighbourOvercrowded(cell->grid_x, cell->grid_y)) {
                 assert(!(cell->is_dead || cell->is_leaving) && "Cell is dead or leaving. Something is wrong.");
                 
                 CellType new_type = sampleRandomType(cell->getType());
@@ -874,8 +885,8 @@ int main(int argc, char *argv[])
     float width = 500.0;
     float height = 500.0;
     int initial_cells = 20;
-    int steps = 100;
-    string sim_name = "bm_sim";
+    int steps = 300;
+    string sim_name = "dbg";
     int num_vessels = 10; // Default number of blood vessels
     bool cold_start = false;
 
