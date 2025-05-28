@@ -100,6 +100,7 @@ public:
     bool is_leaving = false;
     bool in_vessel_neighbourhood = false; // Flag to track if cell is currently inside a blood vessel
     int clone_id=-100;
+    int mass=1;
     int grid_x, grid_y;
     mutable std::mutex cell_mutex; // mutable allows the mutex to be modified even though the function is const
 
@@ -108,8 +109,8 @@ public:
         radius = get_with_default(CELL_RADII, type, DEFAULT_CELL_RADII);
     }
 
-    Cell(float x, float y, float radius, CellType type, int clone_id)
-        : cell_type(type), x(x), y(y), radius(radius), clone_id(clone_id) {
+    Cell(float x, float y, float radius, CellType type, int clone_id, int mass=1)
+        : cell_type(type), x(x), y(y), radius(radius), clone_id(clone_id), mass(mass) {
         id = next_id++;
     }
 
@@ -194,13 +195,18 @@ public:
 
         // calculate the displacement of the cells (Hookean spring)
         // TODO: consider damping this
-        float displacement = k * overlap / 2  * dt;  // equal split of the overlap scaled by dt and k
+        float displacement = k * overlap  * dt;  // equal split of the overlap scaled by dt and k
+
+        // calculate the mass of the cells
+        float total_mass = this->mass + other.mass;
+        float displacement_this = displacement * this->mass / total_mass;
+        float displacement_other = displacement * other.mass / total_mass;
 
         // separate the cells
-        x += nx * displacement;
-        y += ny * displacement;
-        other.x -= nx * displacement;
-        other.y -= ny * displacement;
+        x += nx * displacement_this;
+        y += ny * displacement_this;
+        other.x -= nx * displacement_other;
+        other.y -= ny * displacement_other;
     }
 
     void capVelocities() {
@@ -492,7 +498,7 @@ public:
         {
             float x = static_cast<float>(unif_01(gen) * width);
             float y = static_cast<float>(unif_01(gen) * height);
-            cells.push_back(make_unique<Cell>(x, y, stroma_radius, STROMA, -1));
+            cells.push_back(make_unique<Cell>(x, y, stroma_radius, STROMA, -1, 10));
         }
 
         cout << "Generated " << nStromaCells << " stroma cells" << endl;
@@ -841,7 +847,7 @@ public:
             // Perform simulation step
             step();
 
-            if (current_step % 50 == 0) {
+            if (current_step % 100 == 0) {
                 auto time_now = std::chrono::system_clock::now();   
                 std::chrono::seconds time_elapsed_total = std::chrono::duration_cast<std::chrono::seconds>(time_now - step_start_time);
                 int minutes = time_elapsed_total.count() / 60;
@@ -849,11 +855,11 @@ public:
 
                 cout << "Step " << current_step << ": " << cells.size() << " cells";
                 cout << " | Deaths: " << stats.total_deaths << " | Leaving: " << stats.total_leaving;
-                cout << " | Iter time: " << minutes << "m " << seconds << "s";
+                cout << " | Iter time: " << minutes << "m " << seconds << "s" << endl;
                 
-                if (true) {
+                if (false) {
                     if (!latest_step_timings.empty()) {
-                        cout << "\nTimings (ms):" << endl;
+                        cout << "Timings (ms):" << endl;
                         for(const auto& pair : latest_step_timings) {
                             cout << pair.first << ": " << fixed << setprecision(3) << pair.second.count() << endl;
                         }
@@ -864,7 +870,9 @@ public:
             }
 
             // Write cell data to file for the current step
-            writeCellDataToFile(current_step);
+            if (cold_start && current_step % 500 == 0){
+                writeCellDataToFile(current_step);
+            }
         }
 
         auto end = std::chrono::system_clock::now();
@@ -884,7 +892,7 @@ int main(int argc, char *argv[])
     // Default values
     float width = 500.0;
     float height = 500.0;
-    int initial_cells = 20;
+    int initial_cells = 5;
     int steps = 300;
     string sim_name = "dbg";
     int num_vessels = 10; // Default number of blood vessels

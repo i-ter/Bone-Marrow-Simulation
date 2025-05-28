@@ -9,7 +9,7 @@
 #include <iostream>
 
 constexpr float MAX_SPEED = 1.0f;
-constexpr float VESSEL_DISTANCE_THRESHOLD = 20.0f;
+constexpr float VESSEL_DISTANCE_THRESHOLD = 10.0f;
 constexpr float VESSEL_LEAVING_MULTIPLIER = 10.0f;
 constexpr float CXCL_DENSITY_PER_100_AREA = 6.0f;
 constexpr int MAX_CELLS = 3500;
