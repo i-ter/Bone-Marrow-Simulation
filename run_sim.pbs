@@ -1,5 +1,5 @@
-#PBS -l walltime=03:00:00
-#PBS -l select=1:ncpus=24:mem=4gb:ompthreads=24
+#PBS -l walltime=12:00:00
+#PBS -l select=1:ncpus=64:mem=64gb:ompthreads=64
 
 ml GCC
 
