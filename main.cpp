@@ -928,7 +928,7 @@ public:
             }
 
             // Write cell data to file for the current step
-            if (cold_start && current_step % 100 == 0){
+            if (cold_start && current_step % 500 == 0){
                 writeCellDataToFile(current_step);
             }
             else if ( !cold_start && current_step % 1 == 0){

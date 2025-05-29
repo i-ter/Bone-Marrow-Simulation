@@ -123,9 +123,15 @@ constexpr float DEFAULT_DIVISION_PROB = 1.0f / TIME_UNITS_PER_DAY;
 // unordered_map for cell division probabilities
 inline const std::unordered_map<CellType, float> DIVISION_PROB = {
     {HSC, 0.3f / TIME_UNITS_PER_DAY},
-    {MPP5, 2.0f / TIME_UNITS_PER_DAY},
-    {CMP, 2.0f / TIME_UNITS_PER_DAY},
-    {MEP, 2.0f / TIME_UNITS_PER_DAY},
+    {MPP1, 0.4f / TIME_UNITS_PER_DAY},
+    {MPP2, 0.4f / TIME_UNITS_PER_DAY},
+    {MPP3, 0.4f / TIME_UNITS_PER_DAY},
+    {MPP4, 0.4f / TIME_UNITS_PER_DAY},
+    {MPP5, 0.5f / TIME_UNITS_PER_DAY},
+    {CMP, 1.5f / TIME_UNITS_PER_DAY},
+    {MEP, 1.5f / TIME_UNITS_PER_DAY},
+    {GMP, 1.5f / TIME_UNITS_PER_DAY},
+    {CLP, 1.5f / TIME_UNITS_PER_DAY},
     {Bcell, 0.0f},
     {Myeloid, 0.0f},
     {RBC, 0.0f},
