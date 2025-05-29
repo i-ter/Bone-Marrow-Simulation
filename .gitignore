@@ -21,7 +21,7 @@ gen_movie_main
 /bin/
 /build/
 /dist/
-/data_analysis/
+/data_analysis/*ipynb
 
 # Compiled source
 *.com
