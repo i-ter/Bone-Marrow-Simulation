@@ -9,8 +9,8 @@
 #include <iostream>
 
 constexpr float MAX_SPEED = 1.0f;
-constexpr float VESSEL_DISTANCE_THRESHOLD = 10.0f;
-constexpr float VESSEL_LEAVING_MULTIPLIER = 10.0f;
+constexpr float VESSEL_DISTANCE_THRESHOLD = 20.0f;
+constexpr float VESSEL_LEAVING_MULTIPLIER = 20.0f;
 constexpr float CXCL_DENSITY_PER_100_AREA = 6.0f;
 constexpr int MAX_CELLS = 3500;
 constexpr int SPATIAL_GRID_BLOCK_SIZE = 15;
@@ -147,13 +147,13 @@ inline const std::unordered_map<CellType, float> CELL_DEATH_PROB = {
 };
 
 
-constexpr float DEFAULT_CELL_MOTILITY = 0.1f;
+constexpr float DEFAULT_CELL_MOTILITY = 0.2f;
 
 inline const std::unordered_map<CellType, float> MOTILITY = {
     {STROMA, 0.0f},
 };
 
-inline const std::unordered_map<CellType, float> SWAP_MOTILITY = {
+inline std::unordered_map<CellType, float> SWAP_MOTILITY = {
     {HSC, 0.5f},
     {MPP1, 0.5f},
     {MPP2, 0.5f},

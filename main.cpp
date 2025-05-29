@@ -12,9 +12,12 @@
 #include <cassert>
 #include <fstream>
 #include <algorithm>
-#include "cell_config.h"
 #include <chrono>
 #include <mutex>
+#include <unordered_set>
+#include "cell_config.h"
+
+
 
 // OpenMP support with fallback. fallback runs single threaded, OpenMP not needed to be linked.
 #ifdef _OPENMP
@@ -102,6 +105,7 @@ public:
     int clone_id=-100;
     int mass=1;
     int grid_x, grid_y;
+    float swap_motility_prob=0.0;  // probability of swapping with random neighbour
     mutable std::mutex cell_mutex; // mutable allows the mutex to be modified even though the function is const
 
     void updateType(CellType type) {
@@ -112,6 +116,7 @@ public:
     Cell(float x, float y, float radius, CellType type, int clone_id, int mass=1)
         : cell_type(type), x(x), y(y), radius(radius), clone_id(clone_id), mass(mass) {
         id = next_id++;
+        swap_motility_prob = get_with_zero(SWAP_MOTILITY, type);
     }
 
     ~Cell() {}
@@ -203,10 +208,15 @@ public:
         float displacement_other = displacement * other.mass / total_mass;
 
         // separate the cells
-        x += nx * displacement_this;
-        y += ny * displacement_this;
-        other.x -= nx * displacement_other;
-        other.y -= ny * displacement_other;
+        if (this->getType() != STROMA) {
+            x += nx * displacement_this;
+            y += ny * displacement_this;
+        }
+        if (other.getType() != STROMA) {
+            other.x -= nx * displacement_other;
+            other.y -= ny * displacement_other;
+        }
+
     }
 
     void capVelocities() {
@@ -228,9 +238,11 @@ public:
         return sqrt(dx * dx + dy * dy);
     }
 
+    void setSwapMotility(float prob) {
+        swap_motility_prob = prob;
+    }
+
     bool should_divide() {
-
-
         return unif_01(gen) < get_with_default(DIVISION_PROB, cell_type, DEFAULT_DIVISION_PROB);
     }
 
@@ -247,7 +259,7 @@ public:
     
     // if true, cell will swap with a random neighbour. 
     bool should_swap() {
-        return unif_01(gen) < get_with_zero(SWAP_MOTILITY, cell_type);
+        return unif_01(gen) < swap_motility_prob;
     }
 };
 
@@ -392,9 +404,11 @@ public:
     ofstream vesselDataFile;       // File for blood vessel data
     ofstream paramsFile;           // File for simulation parameters
     bool cold_start;
+    SpatialGrid spatial_grid;
+    int stop_motility_at_step=-1;
+    int immotile_hsc_clone_id=-1;
     std::map<std::string, std::chrono::duration<double, std::milli>> latest_step_timings;
 
-    SpatialGrid spatial_grid;
 
     // Statistics tracking
     struct Stats {
@@ -405,13 +419,21 @@ public:
     } stats;
      
     // init
-    BoneMarrow(float width, float height, int initial_cells, string sim_name = "bm", int num_vessels = 3, bool cold_start = false)
+    BoneMarrow(
+        float width,
+        float height, 
+        int initial_cells, 
+        string sim_name = "bm",
+        int num_vessels = 3, 
+        bool cold_start = false, 
+        int stop_motility_at_step = -1)
         : width(width),
           height(height),
           num_vessels(num_vessels),
           sim_name(sim_name),
           cold_start(cold_start),
-          spatial_grid(width, height, SPATIAL_GRID_BLOCK_SIZE)
+          spatial_grid(width, height, SPATIAL_GRID_BLOCK_SIZE),
+          stop_motility_at_step(stop_motility_at_step)
     {
         if (!fs::exists(dataDir)) {
             fs::create_directory(dataDir);
@@ -430,7 +452,9 @@ public:
                    << "spatial_grid_block_size," << 12.0 << endl
                    << "max_speed," << MAX_SPEED << endl
                    << "vessel_distance_threshold," << VESSEL_DISTANCE_THRESHOLD << endl
-                   << "vessel_leaving_multiplier," << VESSEL_LEAVING_MULTIPLIER << endl;
+                   << "vessel_leaving_multiplier," << VESSEL_LEAVING_MULTIPLIER << endl
+                   << "cold_start," << cold_start << endl
+                   << "stop_motility_at_step," << stop_motility_at_step << endl;
         paramsFile.close();
 
         // Save cell type specific parameters in a separate CSV
@@ -472,12 +496,13 @@ public:
 
             for (auto &[type, num] : INITIAL_CELL_NUMBERS) {
                 for (int i = 0; i < num; ++i) {
+                    // num*=4;
                     float x = static_cast<float>(unif_01(gen) * width);
                     float y = static_cast<float>(unif_01(gen) * height);
                     float radius = get_with_default(CELL_RADII, type, DEFAULT_CELL_RADII);
 
                     int clone_id = -1;
-                    if (type < 11)
+                    if (type < 11) 
                     {
                         clone_id = HSPC_num;
                         HSPC_num++;
@@ -503,7 +528,7 @@ public:
 
         cout << "Generated " << nStromaCells << " stroma cells" << endl;
 
-        generateBloodVessels(num_vessels);
+        generateBloodVessels();
     }
 
     // Generate a random blood vessel
@@ -550,7 +575,7 @@ public:
     }
 
     // Generate all blood vessels
-    void generateBloodVessels(int num_vessels) {
+    void generateBloodVessels() {
 
         generateFixedVessels();
 
@@ -699,9 +724,8 @@ public:
         auto cell_division_start = std::chrono::high_resolution_clock::now();
         #pragma omp parallel for schedule(dynamic)
         for (auto &cell : cells) {
-            if (cell->should_divide() && !spatial_grid.isGridBlockNeighbourOvercrowded(cell->grid_x, cell->grid_y)) {
-                assert(!(cell->is_dead || cell->is_leaving) && "Cell is dead or leaving. Something is wrong.");
-                
+            if (cell->should_divide() && !spatial_grid.isGridBlockNeighbourOvercrowded(cell->grid_x, cell->grid_y)) 
+            {                
                 CellType new_type = sampleRandomType(cell->getType());
                 
                 float new_radius = get_with_default(CELL_RADII, new_type, DEFAULT_CELL_RADII);
@@ -712,9 +736,14 @@ public:
                 float new_x = cell->x + offset * cos(angle);
                 float new_y = cell->y + offset * sin(angle);
 
+                auto new_cell = std::make_unique<Cell>(new_x, new_y, new_radius, new_type, cell->clone_id);
+                if (new_cell->clone_id == immotile_hsc_clone_id) {
+                    new_cell->setSwapMotility(0.0);
+                }
+
                 #pragma omp critical 
                 {
-                    new_cells.push_back(make_unique<Cell>(new_x, new_y, new_radius, new_type, cell->clone_id));
+                    new_cells.push_back(std::move(new_cell));
                 }
 
                 if (cell->getType() != HSC) {
@@ -845,6 +874,35 @@ public:
         
         for (int current_step = 1; current_step < steps+1; ++current_step) {
             // Perform simulation step
+
+            if (current_step == stop_motility_at_step) {
+                cout << "Stopped motility at step " << current_step << endl;
+
+                std::vector<int> hsc_clone_ids; 
+                
+                for (auto &cell : cells) {
+                    if (cell->getType() == HSC) {
+                        hsc_clone_ids.push_back(cell->clone_id);
+                    }
+                }
+                
+                if (!hsc_clone_ids.empty()) {
+                    // Find the HSC with the lowest clone_id
+                    std::sort(hsc_clone_ids.begin(), hsc_clone_ids.end());
+                    immotile_hsc_clone_id = hsc_clone_ids[0];
+                    
+                    cout << "HSC with clone_id " << immotile_hsc_clone_id << " will lose motility" << endl;
+                    
+                    // Set motility to 0 for HSC
+                    for (auto &cell : cells) {
+                        if (cell->getType() == HSC && cell->clone_id == immotile_hsc_clone_id) {
+                            cell->setSwapMotility(0.0);
+                            cout << "It's position: " << cell->x << ", " << cell->y << endl;
+                        }
+                    }
+                }
+            }
+
             step();
 
             if (current_step % 100 == 0) {
@@ -870,7 +928,10 @@ public:
             }
 
             // Write cell data to file for the current step
-            if (cold_start && current_step % 500 == 0){
+            if (cold_start && current_step % 100 == 0){
+                writeCellDataToFile(current_step);
+            }
+            else if ( !cold_start && current_step % 1 == 0){
                 writeCellDataToFile(current_step);
             }
         }
@@ -892,11 +953,12 @@ int main(int argc, char *argv[])
     // Default values
     float width = 500.0;
     float height = 500.0;
-    int initial_cells = 5;
-    int steps = 300;
+    int initial_cells = 3;
+    int steps = 3000;
     string sim_name = "dbg";
     int num_vessels = 10; // Default number of blood vessels
-    bool cold_start = false;
+    bool cold_start = true;
+    int stop_motility_at_step = 100;
 
     // Parse command-line arguments
     if (argc > 1) {
@@ -925,6 +987,9 @@ int main(int argc, char *argv[])
                 // transform(cold_start_str.begin(), cold_start_str.end(), cold_start_str.begin(), ::tolower);
                 cold_start = (cold_start_str == "true" || cold_start_str == "1" || cold_start_str == "yes" || cold_start_str == "y");
             }
+            else if ((arg == "--stop_motility" || arg == "-sm") && i + 1 < argc) {
+                stop_motility_at_step = stoi(argv[++i]);
+            }
             else if (arg == "--help") {
                 cout << "Bone Marrow Simulation\n"
                      << "Usage: " << argv[0] << " [options]\n"
@@ -936,7 +1001,8 @@ int main(int argc, char *argv[])
                      << "  --name NAME        Set simulation name (default: bm_sim)\n"
                      << "  --vessels NUM      Set number of blood vessels (default: 10)\n"
                      << "  --help             Display this help message\n"
-                     << "  --cold_start       Cold start the simulation (default: false)\n";
+                     << "  --cold_start       Cold start the simulation (default: false)\n"
+                     << "  --stop_motility   Stop motility at step (default: -1)\n";
                 return 0;
             }
         }
@@ -949,15 +1015,16 @@ int main(int argc, char *argv[])
     cout << "  Initial cells: " << initial_cells << "\n";
     cout << "  Blood vessels: " << num_vessels << "\n";
     cout << "  Steps: " << steps << "\n";
-    cout << "  Simulation name: " << sim_name << "\n\n";
-    cout << "  Cold start: " << cold_start << "\n\n";
+    cout << "  Simulation name: " << sim_name << "\n";
+    cout << "  Cold start: " << cold_start << "\n";
+    cout << "  Stop motility: " << stop_motility_at_step << "\n";
     #ifdef _OPENMP
         cout << "OpenMP is supported" << endl;
     #else
         cout << "OpenMP is not supported" << endl;
     #endif
 
-    BoneMarrow model(width, height, initial_cells, sim_name, num_vessels, cold_start);
+    BoneMarrow model(width, height, initial_cells, sim_name, num_vessels, cold_start, stop_motility_at_step);
     model.run(steps);
 
     cout << "Simulation completed.\n";
