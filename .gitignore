@@ -21,6 +21,7 @@ gen_movie_main
 /bin/
 /build/
 /dist/
+/data_analysis/
 
 # Compiled source
 *.com
