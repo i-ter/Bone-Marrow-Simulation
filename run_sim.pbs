@@ -1,0 +1,6 @@
+#PBS -l walltime=03:00:00
+#PBS -l select=1:ncpus=24:mem=4gb:ompthreads=24
+
+ml GCC
+
+$PBS_O_WORKDIR/main --width 500 --height 500 --steps 1000 --cold_start false --name hpc_test
