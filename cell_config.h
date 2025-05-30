@@ -166,7 +166,7 @@ inline const std::unordered_map<CellType, float> CELL_DEATH_PROB = {
 };
 
 
-constexpr float DEFAULT_CELL_MOTILITY = 1.0f;
+constexpr float DEFAULT_CELL_MOTILITY = 0.5f;
 
 inline const std::unordered_map<CellType, float> MOTILITY = {
     {STROMA, 0.0f},

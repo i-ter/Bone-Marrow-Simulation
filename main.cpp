@@ -199,11 +199,11 @@ public:
         float ny = y_diff / distance;
 
         // calculate the displacement of the cells (Hookean spring)
-        float displacement = k * overlap * dt * 1.5;
+        float displacement = k * overlap * dt *0.9;
         // calculate the mass of the cells
-        float total_mass = this->mass + other.mass;
-        float displacement_this = displacement * this->mass / total_mass;
-        float displacement_other = displacement * other.mass / total_mass;
+        float total_mass = mass + other.mass;
+        float displacement_this = displacement * other.mass / total_mass;
+        float displacement_other = displacement * mass / total_mass;
 
         // separate the cells
         if (this->getType() != STROMA) {
@@ -712,7 +712,7 @@ public:
                 Cell* c1 = cells[idx].get();
 
                 auto potential_collisions = spatial_grid.getPotentialCollisions(c1);
-
+                
                 for (Cell *c2 : potential_collisions) {
                     if (c1->collidesWith(*c2)) {
                         std::scoped_lock lock(c1->cell_mutex, c2->cell_mutex);
@@ -955,10 +955,10 @@ public:
 int main(int argc, char *argv[])
 {
     // Default values
-    int width = 1000;
-    int height = 1000;
+    int width = 500;
+    int height = 500;
     int initial_cells = 2;
-    int steps = 3000;
+    int steps = 100;
     string sim_name = "dbg";
     int num_vessels = 10; // Default number of blood vessels
     bool cold_start = false;
