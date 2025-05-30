@@ -951,7 +951,7 @@ int main(int argc, char *argv[])
     // Default values
     float width = 500.0;
     float height = 500.0;
-    int initial_cells = 3;
+    int initial_cells = 2;
     int steps = 3000;
     string sim_name = "dbg";
     int num_vessels = 10; // Default number of blood vessels
