@@ -107,6 +107,7 @@ inline const std::unordered_map<CellType, std::vector<std::pair<CellType, float>
     {Lymphocyte8, {{Lymphocyte9, 1.0f}}},
     {Lymphocyte9, {{Lymphocyte10, 1.0f}}},
     {Lymphocyte10, {{Bcell, 1.0f}}},
+    {STROMA, {{STROMA, 1.0f}}},
 };
 
 constexpr float DEFAULT_CELL_RADII = 4.0f;
@@ -136,7 +137,7 @@ inline const std::unordered_map<CellType, float> DIVISION_PROB = {
     {Myeloid, 0.0f},
     {RBC, 0.0f},
     {Megakaryocyte, 0.0f},
-    {STROMA, 0.0f}
+    {STROMA, 0.1f/TIME_UNITS_PER_DAY}
 };
 
 // unordered_map for cell leaving probabilities
@@ -148,8 +149,20 @@ inline const std::unordered_map<CellType, float> LEAVE_PROB = {
     {Megakaryocyte, 0.24f/TIME_UNITS_PER_DAY},
 };
 
+constexpr float DEFAULT_CELL_DEATH_PROB = 0.05f/TIME_UNITS_PER_DAY;
 
 inline const std::unordered_map<CellType, float> CELL_DEATH_PROB = {
+    {HSC, 0.0f},
+    {MPP1, 0.01f/TIME_UNITS_PER_DAY},
+    {MPP2, 0.01f/TIME_UNITS_PER_DAY},
+    {MPP3, 0.01f/TIME_UNITS_PER_DAY},
+    {MPP4, 0.01f/TIME_UNITS_PER_DAY},
+    {MPP5, 0.01f/TIME_UNITS_PER_DAY},
+    {CMP, 0.02f/TIME_UNITS_PER_DAY},
+    {MEP, 0.02f/TIME_UNITS_PER_DAY},
+    {GMP, 0.02f/TIME_UNITS_PER_DAY},
+    {CLP, 0.02f/TIME_UNITS_PER_DAY},
+    {STROMA, 0.01f/TIME_UNITS_PER_DAY},
 };
 
 

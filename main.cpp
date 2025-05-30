@@ -248,7 +248,7 @@ public:
 
     // Check if cell should die (all cell types)
     bool should_die() {
-        return unif_01(gen) < get_with_zero(CELL_DEATH_PROB, cell_type);
+        return unif_01(gen) < get_with_default(CELL_DEATH_PROB, cell_type, DEFAULT_CELL_DEATH_PROB);
     }
 
     // Check if cell should leave (based on probability from LEAVE_PROB map)
@@ -281,7 +281,6 @@ struct SpatialGrid
         grid.resize(grid_width, vector<vector<Cell *>>(grid_height));
         grid_block_cell_counts.resize(grid_width, vector<int>(grid_height, 0));
         grid_block_density_limit = (block_size * block_size * 0.9) / (M_PI * 5 * 5);
-        // grid_block_density_limit = 5;
     }
 
 
@@ -407,6 +406,7 @@ public:
     SpatialGrid spatial_grid;
     int stop_motility_at_step=-1;
     int immotile_hsc_clone_id=-1;
+    int data_write_freq = 1;
     std::map<std::string, std::chrono::duration<double, std::milli>> latest_step_timings;
 
 
@@ -426,14 +426,16 @@ public:
         string sim_name = "bm",
         int num_vessels = 3, 
         bool cold_start = false, 
-        int stop_motility_at_step = -1)
+        int stop_motility_at_step = -1,
+        int data_write_freq = 1)
         : width(width),
           height(height),
           num_vessels(num_vessels),
           sim_name(sim_name),
           cold_start(cold_start),
           spatial_grid(width, height, SPATIAL_GRID_BLOCK_SIZE),
-          stop_motility_at_step(stop_motility_at_step)
+          stop_motility_at_step(stop_motility_at_step),
+          data_write_freq(data_write_freq)
     {
         if (!fs::exists(dataDir)) {
             fs::create_directory(dataDir);
@@ -469,7 +471,7 @@ public:
             paramsFile << getCellTypeName(type) << ","
                        << get_with_default(CELL_RADII, type, DEFAULT_CELL_RADII) << ","
                        << get_with_default(DIVISION_PROB, type, DEFAULT_DIVISION_PROB) << ","
-                       << get_with_zero(CELL_DEATH_PROB, type) << ","
+                       << get_with_default(CELL_DEATH_PROB, type, DEFAULT_CELL_DEATH_PROB) << ","
                        << get_with_zero(LEAVE_PROB, type) << ","
                        << get_with_default(MOTILITY, type, DEFAULT_CELL_MOTILITY) << ","
                        << get_with_zero(INITIAL_CELL_NUMBERS, type) << endl;
@@ -732,7 +734,6 @@ public:
                 float offset = cell->radius + new_radius;
                 float angle = angle_dist(gen);
 
-                // Calculate new position using polar coordinates
                 float new_x = cell->x + offset * cos(angle);
                 float new_y = cell->y + offset * sin(angle);
 
@@ -928,10 +929,7 @@ public:
             }
 
             // Write cell data to file for the current step
-            if (cold_start && current_step % 500 == 0){
-                writeCellDataToFile(current_step);
-            }
-            else if ( !cold_start && current_step % 1 == 0){
+            if (current_step % data_write_freq == 0){
                 writeCellDataToFile(current_step);
             }
         }
@@ -959,6 +957,7 @@ int main(int argc, char *argv[])
     int num_vessels = 10; // Default number of blood vessels
     bool cold_start = true;
     int stop_motility_at_step = 100;
+    int data_write_freq = 1;
 
     // Parse command-line arguments
     if (argc > 1) {
@@ -990,6 +989,9 @@ int main(int argc, char *argv[])
             else if ((arg == "--stop_motility" || arg == "-sm") && i + 1 < argc) {
                 stop_motility_at_step = stoi(argv[++i]);
             }
+            else if ((arg == "--data_write_freq" || arg == "-dwf") && i + 1 < argc) {
+                data_write_freq = stoi(argv[++i]);
+            }
             else if (arg == "--help") {
                 cout << "Bone Marrow Simulation\n"
                      << "Usage: " << argv[0] << " [options]\n"
@@ -1002,7 +1004,8 @@ int main(int argc, char *argv[])
                      << "  --vessels NUM      Set number of blood vessels (default: 10)\n"
                      << "  --help             Display this help message\n"
                      << "  --cold_start       Cold start the simulation (default: false)\n"
-                     << "  --stop_motility   Stop motility at step (default: -1)\n";
+                     << "  --stop_motility   Stop motility at step (default: -1)\n"
+                     << "  --data_write_freq  Write data to file every n steps (default: 1)\n";
                 return 0;
             }
         }
@@ -1019,12 +1022,12 @@ int main(int argc, char *argv[])
     cout << "  Cold start: " << cold_start << "\n";
     cout << "  Stop motility: " << stop_motility_at_step << "\n";
     #ifdef _OPENMP
-        cout << "OpenMP is supported" << endl;
+        cout << "OpenMP is supported" << " | " << omp_get_max_threads() << " threads" << endl;
     #else
         cout << "OpenMP is not supported" << endl;
     #endif
 
-    BoneMarrow model(width, height, initial_cells, sim_name, num_vessels, cold_start, stop_motility_at_step);
+    BoneMarrow model(width, height, initial_cells, sim_name, num_vessels, cold_start, stop_motility_at_step, data_write_freq);
     model.run(steps);
 
     cout << "Simulation completed.\n";
