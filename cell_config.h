@@ -241,7 +241,7 @@ inline const std::unordered_map<CellType, std::tuple<int, int, int>> CELL_COLORS
 
 // 500 x 500 micron grid
 inline std::unordered_map<CellType, float> INITIAL_CELL_NUMBERS = {
-    {HSC, 2},
+    {HSC, 0.5},
     {MPP1, 1},
     {MPP2, 1},
     {MPP3, 1},
