@@ -127,10 +127,10 @@ public:
         return cell_type;
     }
 
-    void move(const float &width, const float &height) {
+    void move(const float &width, const float &height, const float &multiplier=1.0f) {
         // Define diffusion coefficient
         float dt = 1.0; // Define a time step, can be adjusted
-        float D = get_with_default(MOTILITY, cell_type, DEFAULT_CELL_MOTILITY);
+        float D = get_with_default(MOTILITY, cell_type, DEFAULT_CELL_MOTILITY) * multiplier;
         // Update position with spatial diffusion
 
         dx = D * sqrt(dt) * normal_dist(gen);
@@ -199,9 +199,7 @@ public:
         float ny = y_diff / distance;
 
         // calculate the displacement of the cells (Hookean spring)
-        // TODO: consider damping this
-        float displacement = k * overlap  * dt;  // equal split of the overlap scaled by dt and k
-
+        float displacement = k * overlap * dt * 1.5;
         // calculate the mass of the cells
         float total_mass = this->mass + other.mass;
         float displacement_this = displacement * this->mass / total_mass;
@@ -274,7 +272,7 @@ struct SpatialGrid
     vector<vector<int>> grid_block_cell_counts;
     float grid_block_density_limit;
 
-    SpatialGrid(float width, float height, float block_size) : block_size(block_size)
+    SpatialGrid(int width, int height, float block_size) : block_size(block_size)
     {
         grid_width = ceil(width / block_size);
         grid_height = ceil(height / block_size);
@@ -390,7 +388,7 @@ struct SpatialGrid
 
 class BoneMarrow {
 public:
-    float width, height;
+    int width, height;
 
     vector<unique_ptr<Cell>> cells;
     vector<BloodVessel> blood_vessels; // Added blood vessels collection
@@ -420,8 +418,8 @@ public:
      
     // init
     BoneMarrow(
-        float width,
-        float height, 
+        int width,
+        int height, 
         int initial_cells, 
         string sim_name = "bm",
         int num_vessels = 3, 
@@ -496,9 +494,14 @@ public:
             int starting_cells = 0;
             int HSPC_num = 0; // tag HSPC cells with clone_id
 
+            // initial cell_numbers are configured for 500x500 grid
+
+            float cell_num_multiplier = width/500.0f * height/500.0f;
+            cout << "initial cell numbers multiplier: " << cell_num_multiplier << endl;
+
             for (auto &[type, num] : INITIAL_CELL_NUMBERS) {
+                num *= cell_num_multiplier;
                 for (int i = 0; i < num; ++i) {
-                    // num*=4;
                     float x = static_cast<float>(unif_01(gen) * width);
                     float y = static_cast<float>(unif_01(gen) * height);
                     float radius = get_with_default(CELL_RADII, type, DEFAULT_CELL_RADII);
@@ -675,6 +678,9 @@ public:
                     spatial_grid.insert(random_neighbour);
                 }
             }
+            // float local_density = spatial_grid.grid_block_cell_counts[cell->grid_x][cell->grid_y];
+            // float density_factor = 1.0 + (local_density / spatial_grid.grid_block_density_limit);
+
             cell->move(width, height);
         }
         auto move_cells_end = std::chrono::high_resolution_clock::now();
@@ -949,14 +955,14 @@ public:
 int main(int argc, char *argv[])
 {
     // Default values
-    float width = 500.0;
-    float height = 500.0;
+    int width = 1000;
+    int height = 1000;
     int initial_cells = 2;
     int steps = 3000;
     string sim_name = "dbg";
     int num_vessels = 10; // Default number of blood vessels
-    bool cold_start = true;
-    int stop_motility_at_step = 100;
+    bool cold_start = false;
+    int stop_motility_at_step = -999;
     int data_write_freq = 1;
 
     // Parse command-line arguments

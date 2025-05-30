@@ -11,7 +11,7 @@
 constexpr float MAX_SPEED = 1.0f;
 constexpr float VESSEL_DISTANCE_THRESHOLD = 20.0f;
 constexpr float VESSEL_LEAVING_MULTIPLIER = 20.0f;
-constexpr float CXCL_DENSITY_PER_100_AREA = 6.0f;
+constexpr float CXCL_DENSITY_PER_100_AREA = 15.0f;
 constexpr int MAX_CELLS = 3500;
 constexpr int SPATIAL_GRID_BLOCK_SIZE = 15;
 
@@ -149,24 +149,24 @@ inline const std::unordered_map<CellType, float> LEAVE_PROB = {
     {Megakaryocyte, 0.24f/TIME_UNITS_PER_DAY},
 };
 
-constexpr float DEFAULT_CELL_DEATH_PROB = 0.05f/TIME_UNITS_PER_DAY;
+constexpr float DEFAULT_CELL_DEATH_PROB = 0.001f/TIME_UNITS_PER_DAY;
 
 inline const std::unordered_map<CellType, float> CELL_DEATH_PROB = {
     {HSC, 0.0f},
-    {MPP1, 0.01f/TIME_UNITS_PER_DAY},
-    {MPP2, 0.01f/TIME_UNITS_PER_DAY},
-    {MPP3, 0.01f/TIME_UNITS_PER_DAY},
-    {MPP4, 0.01f/TIME_UNITS_PER_DAY},
-    {MPP5, 0.01f/TIME_UNITS_PER_DAY},
-    {CMP, 0.02f/TIME_UNITS_PER_DAY},
-    {MEP, 0.02f/TIME_UNITS_PER_DAY},
-    {GMP, 0.02f/TIME_UNITS_PER_DAY},
-    {CLP, 0.02f/TIME_UNITS_PER_DAY},
-    {STROMA, 0.01f/TIME_UNITS_PER_DAY},
+    {MPP1, 0.001f/TIME_UNITS_PER_DAY},
+    {MPP2, 0.001f/TIME_UNITS_PER_DAY},
+    {MPP3, 0.001f/TIME_UNITS_PER_DAY},
+    {MPP4, 0.001f/TIME_UNITS_PER_DAY},
+    {MPP5, 0.001f/TIME_UNITS_PER_DAY},
+    {CMP, 0.002f/TIME_UNITS_PER_DAY},
+    {MEP, 0.002f/TIME_UNITS_PER_DAY},
+    {GMP, 0.002f/TIME_UNITS_PER_DAY},
+    {CLP, 0.002f/TIME_UNITS_PER_DAY},
+    {STROMA, 0.001f/TIME_UNITS_PER_DAY},
 };
 
 
-constexpr float DEFAULT_CELL_MOTILITY = 0.2f;
+constexpr float DEFAULT_CELL_MOTILITY = 1.0f;
 
 inline const std::unordered_map<CellType, float> MOTILITY = {
     {STROMA, 0.0f},
@@ -241,7 +241,7 @@ inline const std::unordered_map<CellType, std::tuple<int, int, int>> CELL_COLORS
 
 // 500 x 500 micron grid
 inline std::unordered_map<CellType, float> INITIAL_CELL_NUMBERS = {
-    {HSC, 1},
+    {HSC, 2},
     {MPP1, 1},
     {MPP2, 1},
     {MPP3, 1},
@@ -281,7 +281,6 @@ inline std::unordered_map<CellType, float> INITIAL_CELL_NUMBERS = {
     {Lymphocyte10, 160},
     {Bcell, 130},
 };
-
 
 
 template<typename Value> // basically int or float
