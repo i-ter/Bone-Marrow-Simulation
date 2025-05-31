@@ -386,6 +386,12 @@ struct SpatialGrid
     }
 };
 
+enum CellNumState {
+    NORMAL,
+    LOW,
+    HIGH,
+};
+
 class BoneMarrow {
 public:
     int width, height;
@@ -406,7 +412,7 @@ public:
     int immotile_hsc_clone_id=-1;
     int data_write_freq = 1;
     std::map<std::string, std::chrono::duration<double, std::milli>> latest_step_timings;
-
+    CellNumState cell_num_state = NORMAL;
 
     // Statistics tracking
     struct Stats {
@@ -712,7 +718,7 @@ public:
                 Cell* c1 = cells[idx].get();
 
                 auto potential_collisions = spatial_grid.getPotentialCollisions(c1);
-                
+
                 for (Cell *c2 : potential_collisions) {
                     if (c1->collidesWith(*c2)) {
                         std::scoped_lock lock(c1->cell_mutex, c2->cell_mutex);
@@ -873,6 +879,51 @@ public:
         cout << "==============================\n";
     }
 
+    // adjust division probability based on cell number
+    void adjustDivisionProb() {
+        float max_cells = MAX_CELLS*width/500*height/500;
+        
+        if (cells.size() > max_cells && cell_num_state == NORMAL) {
+            cell_num_state = HIGH;
+            DEFAULT_DIVISION_PROB /= 2;
+            for (auto& [type, prob] : DIVISION_PROB) {
+                prob /= 2;
+            }
+            DEFAULT_CELL_DEATH_PROB *= 2;
+            for (auto& [type, prob] : CELL_DEATH_PROB) {
+                prob *= 2;
+            }
+        }
+        else if (cells.size() < max_cells && cell_num_state == HIGH) {
+            cell_num_state = NORMAL;
+            DEFAULT_DIVISION_PROB *= 2;
+            for (auto& [type, prob] : DIVISION_PROB) {
+                prob *= 2;
+            }
+            DEFAULT_CELL_DEATH_PROB /= 2;
+            for (auto& [type, prob] : CELL_DEATH_PROB) {
+                prob /= 2;
+            }
+        }
+        else if (cells.size() < max_cells*MAX_CELLS_LOW_MULTIPLIER && cell_num_state == NORMAL) {
+            cell_num_state = LOW;
+            DEFAULT_DIVISION_PROB *= 2;
+            for (auto& [type, prob] : DIVISION_PROB) {
+                prob *= 2;
+            }
+        }
+        else if (cells.size() > max_cells*MAX_CELLS_LOW_MULTIPLIER && cell_num_state == LOW) {
+            cell_num_state = NORMAL;
+            DEFAULT_DIVISION_PROB /= 2;
+            for (auto& [type, prob] : DIVISION_PROB) {
+                prob /= 2;
+            }
+        }
+        if (DEFAULT_DIVISION_PROB > 0.5f){
+             throw std::runtime_error("Division probability is too high. Somehting wrong with the logic.");
+        }
+    }
+
     void run(int steps) {
         auto start = std::chrono::system_clock::now();
         auto step_start_time = start;
@@ -880,8 +931,8 @@ public:
         writeCellDataToFile(0);
         
         for (int current_step = 1; current_step < steps+1; ++current_step) {
-            // Perform simulation step
-
+            
+            // stop motility mechanism
             if (current_step == stop_motility_at_step) {
                 cout << "Stopped motility at step " << current_step << endl;
 
@@ -909,10 +960,13 @@ public:
                     }
                 }
             }
-
+            
             step();
 
             if (current_step % 100 == 0) {
+                
+                adjustDivisionProb();
+
                 auto time_now = std::chrono::system_clock::now();   
                 std::chrono::seconds time_elapsed_total = std::chrono::duration_cast<std::chrono::seconds>(time_now - step_start_time);
                 int minutes = time_elapsed_total.count() / 60;
@@ -961,7 +1015,7 @@ int main(int argc, char *argv[])
     int steps = 100;
     string sim_name = "dbg";
     int num_vessels = 10; // Default number of blood vessels
-    bool cold_start = false;
+    bool cold_start = true;
     int stop_motility_at_step = -999;
     int data_write_freq = 1;
 

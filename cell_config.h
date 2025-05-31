@@ -12,7 +12,8 @@ constexpr float MAX_SPEED = 1.0f;
 constexpr float VESSEL_DISTANCE_THRESHOLD = 20.0f;
 constexpr float VESSEL_LEAVING_MULTIPLIER = 20.0f;
 constexpr float CXCL_DENSITY_PER_100_AREA = 15.0f;
-constexpr int MAX_CELLS = 3500;
+constexpr int MAX_CELLS = 3500; // conservative upper bound
+constexpr float MAX_CELLS_LOW_MULTIPLIER = 0.75f; // below this, increase div prob
 constexpr int SPATIAL_GRID_BLOCK_SIZE = 15;
 
 // consdier the time step to be 10 mins
@@ -120,9 +121,9 @@ inline const std::unordered_map<CellType, float> CELL_RADII = {
 };
 
 // per day division probability divided by time step
-constexpr float DEFAULT_DIVISION_PROB = 1.0f / TIME_UNITS_PER_DAY;
+inline float DEFAULT_DIVISION_PROB = 1.0f / TIME_UNITS_PER_DAY;
 // unordered_map for cell division probabilities
-inline const std::unordered_map<CellType, float> DIVISION_PROB = {
+inline std::unordered_map<CellType, float> DIVISION_PROB = {
     {HSC, 0.3f / TIME_UNITS_PER_DAY},
     {MPP1, 0.4f / TIME_UNITS_PER_DAY},
     {MPP2, 0.4f / TIME_UNITS_PER_DAY},
@@ -141,7 +142,7 @@ inline const std::unordered_map<CellType, float> DIVISION_PROB = {
 };
 
 // unordered_map for cell leaving probabilities
-inline const std::unordered_map<CellType, float> LEAVE_PROB = {
+inline std::unordered_map<CellType, float> LEAVE_PROB = {
     {RBC, 1.17f/TIME_UNITS_PER_DAY},
     {Platelet, 0.0f},
     {Bcell, 0.65f/TIME_UNITS_PER_DAY},
@@ -149,9 +150,9 @@ inline const std::unordered_map<CellType, float> LEAVE_PROB = {
     {Megakaryocyte, 0.24f/TIME_UNITS_PER_DAY},
 };
 
-constexpr float DEFAULT_CELL_DEATH_PROB = 0.001f/TIME_UNITS_PER_DAY;
+inline float DEFAULT_CELL_DEATH_PROB = 0.001f/TIME_UNITS_PER_DAY;
 
-inline const std::unordered_map<CellType, float> CELL_DEATH_PROB = {
+inline std::unordered_map<CellType, float> CELL_DEATH_PROB = {
     {HSC, 0.0f},
     {MPP1, 0.001f/TIME_UNITS_PER_DAY},
     {MPP2, 0.001f/TIME_UNITS_PER_DAY},
@@ -166,9 +167,9 @@ inline const std::unordered_map<CellType, float> CELL_DEATH_PROB = {
 };
 
 
-constexpr float DEFAULT_CELL_MOTILITY = 0.5f;
+inline float DEFAULT_CELL_MOTILITY = 0.5f;
 
-inline const std::unordered_map<CellType, float> MOTILITY = {
+inline std::unordered_map<CellType, float> MOTILITY = {
     {STROMA, 0.0f},
 };
 
