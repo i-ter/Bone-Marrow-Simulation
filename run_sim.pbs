@@ -3,4 +3,4 @@
 
 ml GCC
 
-$PBS_O_WORKDIR/main --width 1000 --height 1000 --steps 50000 --cold_start false -dwf 100 -sm 20000 --name clonal_sm_hpc
+$PBS_O_WORKDIR/main --width 1000 --height 1000 --steps 50000 --cold_start true --cells 2 -dwf 100 --name clonal_control_hpc
