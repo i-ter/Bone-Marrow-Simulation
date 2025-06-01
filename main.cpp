@@ -30,11 +30,16 @@
 using namespace std;
 namespace fs = std::filesystem;
 
-std::random_device rd;
-std::mt19937 gen(rd());
-std::uniform_real_distribution<> unif_01(0, 1);
-std::uniform_real_distribution<float> angle_dist(0, 2 * M_PI);
-std::normal_distribution<float> normal_dist(0, 1);
+// Thread-local random number generators to avoid contention
+thread_local std::mt19937 tl_gen(std::random_device{}());
+thread_local std::uniform_real_distribution<> tl_unif_01(0, 1);
+thread_local std::uniform_real_distribution<float> tl_angle_dist(0, 2 * M_PI);
+thread_local std::normal_distribution<float> tl_normal_dist(0, 1);
+
+// Wrapper functions for easier migration
+inline float get_random_01() { return tl_unif_01(tl_gen); }
+inline float get_random_angle() { return tl_angle_dist(tl_gen); }
+inline float get_random_normal() { return tl_normal_dist(tl_gen); }
 
 class BloodVessel
 {
@@ -106,7 +111,7 @@ public:
     int mass=1;
     int grid_x, grid_y;
     float swap_motility_prob=0.0;  // probability of swapping with random neighbour
-    mutable std::mutex cell_mutex; // mutable allows the mutex to be modified even though the function is const
+    mutable std::mutex cell_mutex;
 
     void updateType(CellType type) {
         cell_type = type;
@@ -133,8 +138,8 @@ public:
         float D = get_with_default(MOTILITY, cell_type, DEFAULT_CELL_MOTILITY) * multiplier;
         // Update position with spatial diffusion
 
-        dx = D * sqrt(dt) * normal_dist(gen);
-        dy = D * sqrt(dt) * normal_dist(gen);
+        dx = D * sqrt(dt) * get_random_normal();
+        dy = D * sqrt(dt) * get_random_normal();
         x += dx;
         y += dy;
 
@@ -241,23 +246,23 @@ public:
     }
 
     bool should_divide() {
-        return unif_01(gen) < get_with_default(DIVISION_PROB, cell_type, DEFAULT_DIVISION_PROB);
+        return get_random_01() < get_with_default(DIVISION_PROB, cell_type, DEFAULT_DIVISION_PROB);
     }
 
     // Check if cell should die (all cell types)
     bool should_die() {
-        return unif_01(gen) < get_with_default(CELL_DEATH_PROB, cell_type, DEFAULT_CELL_DEATH_PROB);
+        return get_random_01() < get_with_default(CELL_DEATH_PROB, cell_type, DEFAULT_CELL_DEATH_PROB);
     }
 
     // Check if cell should leave (based on probability from LEAVE_PROB map)
     bool should_leave() {
         float multiplier = in_vessel_neighbourhood ? VESSEL_LEAVING_MULTIPLIER : 1.0;
-        return unif_01(gen) < get_with_zero(LEAVE_PROB, cell_type) * multiplier;
+        return get_random_01() < get_with_zero(LEAVE_PROB, cell_type) * multiplier;
     }
     
     // if true, cell will swap with a random neighbour. 
     bool should_swap() {
-        return unif_01(gen) < swap_motility_prob;
+        return get_random_01() < swap_motility_prob;
     }
 };
 
@@ -491,8 +496,8 @@ public:
             cout << "--- COLD STARTING THE SIMULATION ---" << endl;
             for (int i = 0; i < initial_cells; ++i)
             {
-                float x = static_cast<float>(unif_01(gen) * width);
-                float y = static_cast<float>(unif_01(gen) * height);
+                float x = static_cast<float>(get_random_01() * width);
+                float y = static_cast<float>(get_random_01() * height);
                 cells.push_back(make_unique<Cell>(x, y, get_with_default(CELL_RADII, HSC, DEFAULT_CELL_RADII), HSC, i));
             }
         } else {
@@ -508,8 +513,8 @@ public:
             for (auto &[type, num] : INITIAL_CELL_NUMBERS) {
                 num *= cell_num_multiplier;
                 for (int i = 0; i < num; ++i) {
-                    float x = static_cast<float>(unif_01(gen) * width);
-                    float y = static_cast<float>(unif_01(gen) * height);
+                    float x = static_cast<float>(get_random_01() * width);
+                    float y = static_cast<float>(get_random_01() * height);
                     float radius = get_with_default(CELL_RADII, type, DEFAULT_CELL_RADII);
 
                     int clone_id = -1;
@@ -532,8 +537,8 @@ public:
 
         for (int i = 0; i < nStromaCells; ++i)
         {
-            float x = static_cast<float>(unif_01(gen) * width);
-            float y = static_cast<float>(unif_01(gen) * height);
+            float x = static_cast<float>(get_random_01() * width);
+            float y = static_cast<float>(get_random_01() * height);
             cells.push_back(make_unique<Cell>(x, y, stroma_radius, STROMA, -1, 10));
         }
 
@@ -545,11 +550,11 @@ public:
     // Generate a random blood vessel
     BloodVessel generateRandomVessel()
     {
-        float start_x = unif_01(gen) * width;
-        float start_y = unif_01(gen) * height;
-        float length = 100 + unif_01(gen) * 500;
-        float radius = 20 + unif_01(gen) * 30;
-        float angle = angle_dist(gen);
+        float start_x = get_random_01() * width;
+        float start_y = get_random_01() * height;
+        float length = 100 + get_random_01() * 500;
+        float radius = 20 + get_random_01() * 30;
+        float angle = get_random_angle();
 
         return BloodVessel(start_x, start_y, length, radius, angle);
     }
@@ -634,7 +639,7 @@ public:
             return possible_types[0].first;
         }
 
-        float r = unif_01(gen);
+        float r = get_random_01();
         float cumulative_prob = 0.0f;
         
         for (const auto &[type, prob]: possible_types) {
@@ -646,42 +651,37 @@ public:
         throw std::runtime_error("Failed to sample random type");
     }
 
-    void step() {
-        auto step_total_start = std::chrono::high_resolution_clock::now();
-        std::map<std::string, std::chrono::duration<double, std::milli>> timings;
-
-        vector<unique_ptr<Cell>> new_cells;
-
-        // 0. setup spatial grid for efficient handling of cell neighbourhood
-        auto grid_setup_start = std::chrono::high_resolution_clock::now();
+    void updateSpatialGrid() {
         spatial_grid.clear();
         for (auto &cell : cells) {
             spatial_grid.insert(cell.get());
         }
         spatial_grid.calculateGridBlockCellCounts();
-        auto grid_setup_end = std::chrono::high_resolution_clock::now();
-        timings["grid_setup"] = grid_setup_end - grid_setup_start;
+    }
 
-        // 1. Move cells
-        auto move_cells_start = std::chrono::high_resolution_clock::now();
-        for (auto &cell : cells) {
+    void moveCells() {
+        #pragma omp parallel for schedule(dynamic)
+        for (size_t idx = 0; idx < cells.size(); ++idx) {
+            Cell* cell = cells[idx].get();
             // swapping cells with neighbours
             if (cell->should_swap()) {
                 // find a random neighbour
-                vector<Cell *> neighbours = spatial_grid.getValidNeighbours(cell.get(), 10);
+                vector<Cell *> neighbours = spatial_grid.getValidNeighbours(cell, 10);
                 if (neighbours.size() > 0) {
-                    Cell *current_cell_ptr = cell.get(); // Get raw pointer from unique_ptr for the current cell
                     Cell *random_neighbour = neighbours[rand() % neighbours.size()];
 
-                    // Remove both cells from their current grid positions BEFORE their coordinates are changed.
-                    // This ensures they are removed from the correct buckets based on their pre-swap locations.
-                    spatial_grid.remove(current_cell_ptr);
-                    spatial_grid.remove(random_neighbour);
+                    #pragma omp critical
+                    {
+                        // Remove both cells from their current grid positions BEFORE their coordinates are changed.
+                        // This ensures they are removed from the correct buckets based on their pre-swap locations.
+                        spatial_grid.remove(cell);
+                        spatial_grid.remove(random_neighbour);
 
-                    swapCells(current_cell_ptr, random_neighbour);
+                        swapCells(cell, random_neighbour);
 
-                    spatial_grid.insert(current_cell_ptr);
-                    spatial_grid.insert(random_neighbour);
+                        spatial_grid.insert(cell);
+                        spatial_grid.insert(random_neighbour);
+                    }
                 }
             }
             // float local_density = spatial_grid.grid_block_cell_counts[cell->grid_x][cell->grid_y];
@@ -689,62 +689,53 @@ public:
 
             cell->move(width, height);
         }
-        auto move_cells_end = std::chrono::high_resolution_clock::now();
-        timings["move_cells"] = move_cells_end - move_cells_start;
+    }
 
-        // 2. Handle blood vessel collisions
-        auto vessel_collision_start = std::chrono::high_resolution_clock::now();
-        for (auto &cell : cells) {
-            cell->in_vessel_neighbourhood = false;
+    void handleVesselCollisions() {
+        #pragma omp parallel for schedule(dynamic)
+        for (size_t idx = 0; idx < cells.size(); ++idx) {
+            // Cell* cell = cells[idx].get();
+            cells[idx]->in_vessel_neighbourhood = false;
             for (const auto &vessel : blood_vessels){
-                if (cell->inVesselNeighbour(vessel, VESSEL_DISTANCE_THRESHOLD)) {
-                    cell->in_vessel_neighbourhood = true;
+                if (cells[idx]->inVesselNeighbour(vessel, VESSEL_DISTANCE_THRESHOLD)) {
+                    cells[idx]->in_vessel_neighbourhood = true;
                     break;
                 }
             }
-        }
-        auto vessel_collision_end = std::chrono::high_resolution_clock::now();
-        timings["vessel_collision"] = vessel_collision_end - vessel_collision_start;
+        }   
+    }
 
-        float small_time_step = 0.1; // 1 min
-        int num_inner_steps = 10; // big loop is 10 mins
+    void resolveCollisions(const float &dt) {
+        #pragma omp parallel for schedule(dynamic)
+        for (size_t idx = 0; idx < cells.size(); ++idx) {
+            Cell* c1 = cells[idx].get();
 
-        // 3. Check for collisions and resolve them
-        auto resolve_collision_start = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < num_inner_steps; ++i) {
+            auto potential_collisions = spatial_grid.getPotentialCollisions(c1);
 
-            #pragma omp parallel for schedule(dynamic)
-            for (size_t idx = 0; idx < cells.size(); ++idx) {
-                Cell* c1 = cells[idx].get();
+            for (Cell *c2 : potential_collisions) {
+                if (c1->collidesWith(*c2)) {
+                    std::scoped_lock lock(c1->cell_mutex, c2->cell_mutex);
 
-                auto potential_collisions = spatial_grid.getPotentialCollisions(c1);
-
-                for (Cell *c2 : potential_collisions) {
-                    if (c1->collidesWith(*c2)) {
-                        std::scoped_lock lock(c1->cell_mutex, c2->cell_mutex);
-
-                        c1->resolveCollision(*c2, 1, small_time_step);
-                        c1->handleBoundaryCollision(width, height);
-                        c2->handleBoundaryCollision(width, height);
-                    }
+                    c1->resolveCollision(*c2, 1, dt);
+                    c1->handleBoundaryCollision(width, height);
+                    c2->handleBoundaryCollision(width, height);
                 }
             }
         }
+    }
 
-        auto resolve_collision_end = std::chrono::high_resolution_clock::now();
-        timings["resolve_collision"] = resolve_collision_end - resolve_collision_start;
-
-        // 4. Cell division
-        auto cell_division_start = std::chrono::high_resolution_clock::now();
+    void handleCellDivision(std::vector<std::unique_ptr<Cell>> &new_cells) {
         #pragma omp parallel for schedule(dynamic)
-        for (auto &cell : cells) {
+        for (size_t idx = 0; idx < cells.size(); ++idx) {
+            auto &cell = cells[idx];
+            
             if (cell->should_divide() && !spatial_grid.isGridBlockNeighbourOvercrowded(cell->grid_x, cell->grid_y)) 
             {                
                 CellType new_type = sampleRandomType(cell->getType());
                 
                 float new_radius = get_with_default(CELL_RADII, new_type, DEFAULT_CELL_RADII);
                 float offset = cell->radius + new_radius;
-                float angle = angle_dist(gen);
+                float angle = get_random_angle();
 
                 float new_x = cell->x + offset * cos(angle);
                 float new_y = cell->y + offset * sin(angle);
@@ -765,12 +756,18 @@ public:
                 }
             }
         }
-        auto cell_division_end = std::chrono::high_resolution_clock::now();
-        timings["cell_division"] = cell_division_end - cell_division_start;
+    }
+    
+    void removeCells() {
+        auto isCellInactive = [](const std::unique_ptr<Cell> &cell) {
+            return cell->is_dead || cell->is_leaving;
+        };
+        auto newEnd = std::remove_if(cells.begin(), cells.end(), isCellInactive);
+        cells.erase(newEnd, cells.end());
+    }
 
-        // 5. Check for cell death and leaving
-        auto death_leaving_start = std::chrono::high_resolution_clock::now();
-        
+
+    void handleCellDeathAndLeaving() {
         int num_threads = omp_get_max_threads();
         std::vector<BoneMarrow::Stats> thread_stats(num_threads);
 
@@ -801,32 +798,76 @@ public:
                 stats.leaving_by_type[type] += count;
             }
         }
+    }
+
+    void step() {
+        auto step_total_start = std::chrono::high_resolution_clock::now();
+        std::map<std::string, std::chrono::duration<double, std::milli>> timings;
+
+
+        // 0. setup spatial grid for efficient handling of cell neighbourhood
+        auto grid_setup_start = std::chrono::high_resolution_clock::now();
+        updateSpatialGrid();
+        auto grid_setup_end = std::chrono::high_resolution_clock::now();
+        timings["grid_setup"] = grid_setup_end - grid_setup_start;
+
+        // 1. Move cells
+        auto move_cells_start = std::chrono::high_resolution_clock::now();
+        moveCells();
+        auto move_cells_end = std::chrono::high_resolution_clock::now();
+        timings["move_cells"] = move_cells_end - move_cells_start;
+
+        // 2. Handle blood vessel collisions
+        auto vessel_collision_start = std::chrono::high_resolution_clock::now();
+        handleVesselCollisions();
+        auto vessel_collision_end = std::chrono::high_resolution_clock::now();
+        timings["vessel_collision"] = vessel_collision_end - vessel_collision_start;
+
+        // 3. Check for collisions and resolve them
+        auto resolve_collision_start = std::chrono::high_resolution_clock::now();
+
+        float small_time_step = 0.2; // 1 min
+        int num_inner_steps = 5; // big loop is 10 mins
+
+        for (int i = 0; i < num_inner_steps; ++i) {
+            resolveCollisions(small_time_step);
+        }
+
+        auto resolve_collision_end = std::chrono::high_resolution_clock::now();
+        timings["resolve_collision"] = resolve_collision_end - resolve_collision_start;
+
+        // 4. Cell division
+        auto cell_division_start = std::chrono::high_resolution_clock::now();
+        std::vector<std::unique_ptr<Cell>> new_cells;
+
+        handleCellDivision(new_cells);
+
+        auto cell_division_end = std::chrono::high_resolution_clock::now();
+        timings["cell_division"] = cell_division_end - cell_division_start;
+
+        // 5. Check for cell death and leaving
+        auto death_leaving_start = std::chrono::high_resolution_clock::now();
+        handleCellDeathAndLeaving();
 
         auto death_leaving_end = std::chrono::high_resolution_clock::now();
         timings["death_leaving"] = death_leaving_end - death_leaving_start;
 
         // Remove dead and leaving cells from the simulation
         auto remove_inactive_start = std::chrono::high_resolution_clock::now();
-        auto isCellInactive = [](const unique_ptr<Cell> &cell) {
-            return cell->is_dead || cell->is_leaving;
-        };
-        auto newEnd = remove_if(cells.begin(), cells.end(), isCellInactive);
-        cells.erase(newEnd, cells.end());
+        removeCells();
         auto remove_inactive_end = std::chrono::high_resolution_clock::now();
         timings["remove_inactive"] = remove_inactive_end - remove_inactive_start;
 
         // Add new cells
         auto add_new_cells_start = std::chrono::high_resolution_clock::now();
-        for (auto &new_cell : new_cells) {
-            cells.push_back(std::move(new_cell));
-        }
+        cells.insert(cells.end(), 
+                    std::make_move_iterator(new_cells.begin()), // move iterators to instead of copying
+                    std::make_move_iterator(new_cells.end()));
         auto add_new_cells_end = std::chrono::high_resolution_clock::now();
         timings["add_new_cells"] = add_new_cells_end - add_new_cells_start;
 
         auto step_total_end = std::chrono::high_resolution_clock::now();
         timings["step_total"] = step_total_end - step_total_start;
-
-        // Store timings for later printing
         latest_step_timings = timings;
     }
 
@@ -976,7 +1017,7 @@ public:
                 cout << " | Deaths: " << stats.total_deaths << " | Leaving: " << stats.total_leaving;
                 cout << " | Iter time: " << minutes << "m " << seconds << "s" << endl;
                 
-                if (false) {
+                if (true) {
                     if (!latest_step_timings.empty()) {
                         cout << "Timings (ms):" << endl;
                         for(const auto& pair : latest_step_timings) {
