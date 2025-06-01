@@ -2,7 +2,7 @@
 CXX = clang++
 
 # Compiler Flags
-CXXFLAGS = -std=c++17 -I /opt/homebrew/include -Wall -Wextra -g
+CXXFLAGS = -std=c++17 -I /opt/homebrew/include -Wall -Wextra -O3
 
 # Linker Flags
 LDFLAGS = -L /opt/homebrew/lib -lsfml-graphics -lsfml-window -lsfml-system
