@@ -1,6 +1,6 @@
 #PBS -l walltime=24:00:00
-#PBS -l select=1:ncpus=12:mem=20gb:ompthreads=12
+#PBS -l select=1:ncpus=12:mem=20gb:ompthreads=12:cpu_type=icelake
 
 ml GCC
 
-$PBS_O_WORKDIR/main --width 1000 --height 1000 --steps 200000 --cold_start true --cells 2 -sm 75000 -dwf 500 --name clonal_stopmotility_hpc
+$PBS_O_WORKDIR/main --width 500 --height 500 --steps 100000 --cold_start true --cells 3 -smc false -dwf 500 --name smc_control

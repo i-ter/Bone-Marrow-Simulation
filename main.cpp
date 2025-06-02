@@ -22,19 +22,26 @@
 // OpenMP support with fallback. fallback runs single threaded, OpenMP not needed to be linked.
 #ifdef _OPENMP
     #include <omp.h>
+    // Thread-local random number generators to avoid contention
+    thread_local std::mt19937 tl_gen(std::random_device{}());
+    thread_local std::uniform_real_distribution<> tl_unif_01(0, 1);
+    thread_local std::uniform_real_distribution<float> tl_angle_dist(0, 2 * M_PI);
+    thread_local std::normal_distribution<float> tl_normal_dist(0, 1);
 #else  
     inline int omp_get_max_threads() { return 1; }
     inline int omp_get_thread_num() { return 0; }
+
+    // Thread-local random number generators to avoid contention
+    std::mt19937 tl_gen(std::random_device{}());
+    std::uniform_real_distribution<> tl_unif_01(0, 1);
+    std::uniform_real_distribution<float> tl_angle_dist(0, 2 * M_PI);
+    std::normal_distribution<float> tl_normal_dist(0, 1);
 #endif
+
 
 using namespace std;
 namespace fs = std::filesystem;
 
-// Thread-local random number generators to avoid contention
-thread_local std::mt19937 tl_gen(std::random_device{}());
-thread_local std::uniform_real_distribution<> tl_unif_01(0, 1);
-thread_local std::uniform_real_distribution<float> tl_angle_dist(0, 2 * M_PI);
-thread_local std::normal_distribution<float> tl_normal_dist(0, 1);
 
 // Wrapper functions for easier migration
 inline float get_random_01() { return tl_unif_01(tl_gen); }
@@ -165,62 +172,63 @@ public:
         }
     }
 
-    bool collidesWith(const Cell &other) const {
-        float dx = x - other.x;
-        float dy = y - other.y;
-        float distance_squared = dx * dx + dy * dy;
-        float min_distance = radius + other.radius;
-        return distance_squared < min_distance * min_distance;
-    }
+    // bool collidesWith(const Cell &other) const {
+    //     float dx = x - other.x;
+    //     float dy = y - other.y;
+    //     float distance_squared = dx * dx + dy * dy;
+    //     float min_distance = radius + other.radius;
+    //     return distance_squared < min_distance * min_distance;
+    // }
 
     // Check if cell collides with a blood vessel
     bool inVesselNeighbour(const BloodVessel &vessel, const float &distance_threshold) const {
         return vessel.distanceFrom(x, y) <= distance_threshold;
     }
 
-    void resolveCollision(Cell &other, const float &k, const float &dt) {
-        // Calculates the force of the collision. F_ij = k * overlap * n_ij.
-        // k is the spring constant. assumes unit mass.
+    // void resolveCollision(Cell &other, const float &k, const float &dt) {
+    //     // TODO: This is technically Gauss Seidel method.
+    //     // Calculates the force of the collision. F_ij = k * overlap * n_ij.
+    //     // k is the spring constant. assumes unit mass.
 
-        // Calculate displacement vector
-        float x_diff = x - other.x;
-        float y_diff = y - other.y;
-        float distance = sqrt(x_diff * x_diff + y_diff * y_diff);
+    //     // Calculate displacement vector
+    //     float x_diff = x - other.x;
+    //     float y_diff = y - other.y;
+    //     float distance = sqrt(x_diff * x_diff + y_diff * y_diff);
 
-        // Ensure cells are not exactly on top of each other. leads to numerical instability.
-        if (distance < 0.1) {
-            distance = 0.1;
-        }
+    //     // Ensure cells are not exactly on top of each other. leads to numerical instability.
+    //     if (distance < 0.1) {
+    //         distance = 0.1;
+    //     }
 
-        float overlap = radius + other.radius - distance;
+    //     float overlap = radius + other.radius - distance;
 
-        // If cells are overlapping
-        if (overlap < 0){
-            return;
-        }
+    //     // If cells are overlapping
+    //     if (overlap < 0){
+    //         return;
+    //     }
 
-        // unit vector in the direction of the collision
-        float nx = x_diff / distance;
-        float ny = y_diff / distance;
+    //     // unit vector in the direction of the collision
+    //     float nx = x_diff / distance;
+    //     float ny = y_diff / distance;
 
-        // calculate the displacement of the cells (Hookean spring)
-        float displacement = k * overlap * dt *0.9;
-        // calculate the mass of the cells
-        float total_mass = mass + other.mass;
-        float displacement_this = displacement * other.mass / total_mass;
-        float displacement_other = displacement * mass / total_mass;
+    //     // calculate the displacement of the cells (Hookean spring)
+    //     float displacement = k * overlap * dt;
+    //     // calculate the mass of the cells
+    //     float total_mass = mass + other.mass;
+    //     float displacement_this = displacement * other.mass / total_mass;
+    //     float displacement_other = displacement * mass / total_mass;
 
-        // separate the cells
-        if (this->getType() != STROMA) {
-            x += nx * displacement_this;
-            y += ny * displacement_this;
-        }
-        if (other.getType() != STROMA) {
-            other.x -= nx * displacement_other;
-            other.y -= ny * displacement_other;
-        }
+    //     // separate the cells
+    //     if (this->getType() != STROMA) {
+    //         x += nx * displacement_this;
+    //         y += ny * displacement_this;
+    //     }
+    //     if (other.getType() != STROMA) {
+    //         other.x -= nx * displacement_other;
+    //         other.y -= ny * displacement_other;
+    //     }
 
-    }
+    // }
 
     void capVelocities() {
         float speed = sqrt(dx * dx + dy * dy);
@@ -524,7 +532,7 @@ public:
                         HSPC_num++;
                     }
 
-                    cells.push_back(make_unique<Cell>(x, y, radius, type, clone_id));
+                    cells.push_back(make_unique<Cell>(x/2, y, radius, type, clone_id));
                 }
                 starting_cells += num;
             }
@@ -705,7 +713,17 @@ public:
         }   
     }
 
-    void resolveCollisions(const float &dt) {
+    float resolveCollisions(const float &dt) {
+        // Store displacement vectors for each cell (Jacobi iteration)
+        std::vector<std::pair<float, float>> displacements(cells.size(), {0.0f, 0.0f});
+        
+        // Create a map from cell pointer to index for O(1) lookup
+        std::unordered_map<Cell*, size_t> cell_to_index;
+        for (size_t i = 0; i < cells.size(); ++i) {
+            cell_to_index[cells[i].get()] = i;
+        }
+        
+        // Calculate all displacements
         #pragma omp parallel for schedule(dynamic)
         for (size_t idx = 0; idx < cells.size(); ++idx) {
             Cell* c1 = cells[idx].get();
@@ -713,15 +731,68 @@ public:
             auto potential_collisions = spatial_grid.getPotentialCollisions(c1);
 
             for (Cell *c2 : potential_collisions) {
-                if (c1->collidesWith(*c2)) {
+                // Only process if c2 comes after c1 in the array to avoid double-processing
+                auto c2_iter = cell_to_index.find(c2);
+                if (c2_iter == cell_to_index.end() || c2_iter->second <= idx) {
+                    continue;
+                }
+                size_t c2_idx = c2_iter->second;
+                
+                float x_diff = c1->x - c2->x;
+                float y_diff = c1->y - c2->y;
+                float distance = sqrt(x_diff * x_diff + y_diff * y_diff);
+
+                // Ensure cells are not exactly on top of each other
+                if (distance < 0.1) {
+                    distance = 0.1;
+                }
+
+                float overlap = c1->radius + c2->radius - distance;
+
+                if (overlap > 0) {
+                    float nx = x_diff / distance;
+                    float ny = y_diff / distance;
+
+                    // Calculate the displacement of the cells (Hookean spring)
+                    const float k = 1.0f;
+                    float displacement = k * overlap * dt;
+                    float total_mass = c1->mass + c2->mass;
+                    float displacement_c1 = displacement * c2->mass / total_mass;
+                    float displacement_c2 = displacement * c1->mass / total_mass;
+
                     std::scoped_lock lock(c1->cell_mutex, c2->cell_mutex);
 
-                    c1->resolveCollision(*c2, 1, dt);
-                    c1->handleBoundaryCollision(width, height);
-                    c2->handleBoundaryCollision(width, height);
+                    // Accumulate displacements
+                    if (c1->getType() != STROMA) {
+                        displacements[idx].first += nx * displacement_c1;
+                        displacements[idx].second += ny * displacement_c1;
+                    }
+                    
+                    if (c2->getType() != STROMA) {
+                        displacements[c2_idx].first -= nx * displacement_c2;
+                        displacements[c2_idx].second -= ny * displacement_c2;
+                    }
+            
                 }
             }
         }
+        
+        double total_displacement_x = 0.0;
+        double total_displacement_y = 0.0;
+        
+        // Apply all displacements simultaneously (Jacobi step)
+        // reduction creates private copies of the variables
+        #pragma omp parallel for reduction(+ : total_displacement_x, total_displacement_y)
+        for (size_t idx = 0; idx < cells.size(); ++idx) {
+            Cell* cell = cells[idx].get();
+            cell->x += displacements[idx].first;
+            cell->y += displacements[idx].second;
+            cell->handleBoundaryCollision(width, height);
+            
+            total_displacement_x += std::abs(displacements[idx].first);
+            total_displacement_y += std::abs(displacements[idx].second);
+        }
+        return total_displacement_x;
     }
 
     void handleCellDivision(std::vector<std::unique_ptr<Cell>> &new_cells) {
@@ -827,10 +898,16 @@ public:
         auto resolve_collision_start = std::chrono::high_resolution_clock::now();
 
         float small_time_step = 0.2; // 1 min
-        int num_inner_steps = 5; // big loop is 10 mins
+        int num_inner_steps = 100; // big loop is 10 mins
+
+        float disp = 1000;
 
         for (int i = 0; i < num_inner_steps; ++i) {
-            resolveCollisions(small_time_step);
+            disp = resolveCollisions(small_time_step);
+            if (disp < 30) {
+                // cout << "Stopping at step " << i << endl;
+                break;
+            }
         }
 
         auto resolve_collision_end = std::chrono::high_resolution_clock::now();
@@ -965,6 +1042,37 @@ public:
         }
     }
 
+    // stop motility mechanism
+    void stopMotility(const float &step_num) {
+        if (step_num == stop_motility_at_step) {
+            cout << "Stopped motility at step " << step_num << endl;
+
+            std::vector<int> hsc_clone_ids; 
+            
+            for (auto &cell : cells) {
+                if (cell->getType() == HSC) {
+                    hsc_clone_ids.push_back(cell->clone_id);
+                }
+            }
+            
+            if (!hsc_clone_ids.empty()) {
+                // Find the HSC with the lowest clone_id
+                std::sort(hsc_clone_ids.begin(), hsc_clone_ids.end());
+                immotile_hsc_clone_id = hsc_clone_ids[0];
+                
+                cout << "HSC with clone_id " << immotile_hsc_clone_id << " will lose motility" << endl;
+                
+                // Set motility to 0 for HSC
+                for (auto &cell : cells) {
+                    if (cell->getType() == HSC && cell->clone_id == immotile_hsc_clone_id) {
+                        cell->setSwapMotility(0.0);
+                        cout << "It's position: " << cell->x << ", " << cell->y << endl;
+                    }
+                }
+            }
+        }
+    }
+    
     void run(int steps) {
         auto start = std::chrono::system_clock::now();
         auto step_start_time = start;
@@ -973,34 +1081,7 @@ public:
         
         for (int current_step = 1; current_step < steps+1; ++current_step) {
             
-            // stop motility mechanism
-            if (current_step == stop_motility_at_step) {
-                cout << "Stopped motility at step " << current_step << endl;
-
-                std::vector<int> hsc_clone_ids; 
-                
-                for (auto &cell : cells) {
-                    if (cell->getType() == HSC) {
-                        hsc_clone_ids.push_back(cell->clone_id);
-                    }
-                }
-                
-                if (!hsc_clone_ids.empty()) {
-                    // Find the HSC with the lowest clone_id
-                    std::sort(hsc_clone_ids.begin(), hsc_clone_ids.end());
-                    immotile_hsc_clone_id = hsc_clone_ids[0];
-                    
-                    cout << "HSC with clone_id " << immotile_hsc_clone_id << " will lose motility" << endl;
-                    
-                    // Set motility to 0 for HSC
-                    for (auto &cell : cells) {
-                        if (cell->getType() == HSC && cell->clone_id == immotile_hsc_clone_id) {
-                            cell->setSwapMotility(0.0);
-                            cout << "It's position: " << cell->x << ", " << cell->y << endl;
-                        }
-                    }
-                }
-            }
+            stopMotility(current_step);
             
             step();
 
@@ -1045,6 +1126,35 @@ public:
         cout << "\nTotal simulation time: " << minutes << " minutes " << seconds << " seconds\n" << endl;
 
     }
+    
+    void runTest() {
+        cells.clear();
+        
+        float radius = get_with_default(CELL_RADII, Myeloblast1, DEFAULT_CELL_RADII);
+
+        cells.push_back(std::make_unique<Cell>(20, 20, radius, Myeloblast1, 0));
+        cells.push_back(std::make_unique<Cell>(21, 20, radius, Myeloblast1, 0));
+
+        cells.push_back(std::make_unique<Cell>(21, 21, radius, Myeloblast1, 0));
+        cells.push_back(std::make_unique<Cell>(19, 21, radius, Myeloblast1, 0));
+        cells.push_back(std::make_unique<Cell>(19, 19, radius, Myeloblast1, 0));
+        cells.push_back(std::make_unique<Cell>(21, 19, radius, Myeloblast1, 0));
+
+        cells.push_back(std::make_unique<Cell>(22, 18, radius, Myeloblast1, 0));
+        cells.push_back(std::make_unique<Cell>(22, 22, radius, Myeloblast1, 0));
+        cells.push_back(std::make_unique<Cell>(18, 22, radius, Myeloblast1, 0));
+        cells.push_back(std::make_unique<Cell>(18, 18, radius, Myeloblast1, 0));
+
+
+        writeCellDataToFile(0);
+
+        for (int i = 0; i < 5; i++) {
+            updateSpatialGrid();
+            resolveCollisions(0.1);
+            writeCellDataToFile(i+1);
+        }
+        
+    }
 };
 
 int main(int argc, char *argv[])
@@ -1059,6 +1169,7 @@ int main(int argc, char *argv[])
     bool cold_start = true;
     int stop_motility_at_step = -999;
     int data_write_freq = 1;
+    bool smc = false;
 
     // Parse command-line arguments
     if (argc > 1) {
@@ -1089,6 +1200,10 @@ int main(int argc, char *argv[])
             }
             else if ((arg == "--stop_motility" || arg == "-sm") && i + 1 < argc) {
                 stop_motility_at_step = stoi(argv[++i]);
+            }
+            else if ((arg == "--stop_motility_completely" || arg == "-smc") && i + 1 < argc) {
+                string smc_str = argv[++i];
+                smc = (smc_str == "true" || smc_str == "1" || smc_str == "yes" || smc_str == "y");
             }
             else if ((arg == "--data_write_freq" || arg == "-dwf") && i + 1 < argc) {
                 data_write_freq = stoi(argv[++i]);
@@ -1122,14 +1237,22 @@ int main(int argc, char *argv[])
     cout << "  Simulation name: " << sim_name << "\n";
     cout << "  Cold start: " << cold_start << "\n";
     cout << "  Stop motility: " << stop_motility_at_step << "\n";
+    cout << "  Stop motility completely: " << smc << "\n";
     #ifdef _OPENMP
         cout << "OpenMP is supported" << " | " << omp_get_max_threads() << " threads" << endl;
     #else
         cout << "OpenMP is not supported" << endl;
     #endif
 
+    if (smc) {
+        for (auto& [type, prob] : SWAP_MOTILITY) {
+            prob = 0.0;
+        }
+    }
+
     BoneMarrow model(width, height, initial_cells, sim_name, num_vessels, cold_start, stop_motility_at_step, data_write_freq);
     model.run(steps);
+    // model.runTest();
 
     cout << "Simulation completed.\n";
     return 0;

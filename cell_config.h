@@ -141,7 +141,7 @@ inline std::unordered_map<CellType, float> DIVISION_PROB = {
     {STROMA, 0.0f}
 };
 
-// unordered_map for cell leaving probabilities
+// cell leaving probabilities
 inline std::unordered_map<CellType, float> LEAVE_PROB = {
     {RBC, 1.17f/TIME_UNITS_PER_DAY},
     {Platelet, 0.0f},
