@@ -138,7 +138,7 @@ inline std::unordered_map<CellType, float> DIVISION_PROB = {
     {Myeloid, 0.0f},
     {RBC, 0.0f},
     {Megakaryocyte, 0.0f},
-    {STROMA, 0.001f/TIME_UNITS_PER_DAY}
+    {STROMA, 0.0f}
 };
 
 // unordered_map for cell leaving probabilities
@@ -163,7 +163,7 @@ inline std::unordered_map<CellType, float> CELL_DEATH_PROB = {
     {MEP, 0.002f/TIME_UNITS_PER_DAY},
     {GMP, 0.002f/TIME_UNITS_PER_DAY},
     {CLP, 0.002f/TIME_UNITS_PER_DAY},
-    {STROMA, 0.001f/TIME_UNITS_PER_DAY},
+    {STROMA, 0.0f},
 };
 
 

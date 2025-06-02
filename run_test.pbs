@@ -3,4 +3,4 @@
 
 ml GCC
 
-$PBS_O_WORKDIR/main --width 500 --height 500 --steps 3000 --cold_start false -dwf 1 --name test_hpc
+$PBS_O_WORKDIR/main --width 1000 -height 1000 --steps 201 --cold_start false -dwf 1 --name test_hpc
