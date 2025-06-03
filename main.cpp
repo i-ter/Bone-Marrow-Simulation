@@ -1004,11 +1004,14 @@ public:
         if (cells.size() > max_cells && cell_num_state == NORMAL) {
             cell_num_state = HIGH;
             DEFAULT_DIVISION_PROB /= 2;
-            for (auto& [type, prob] : DIVISION_PROB) {
+            for (auto &[type, prob] : DIVISION_PROB) {
                 prob /= 2;
             }
             DEFAULT_CELL_DEATH_PROB *= 2;
-            for (auto& [type, prob] : CELL_DEATH_PROB) {
+            for (auto &[type, prob] : CELL_DEATH_PROB) {
+                prob *= 2;
+            }
+            for (auto &[type, prob] : LEAVE_PROB) {
                 prob *= 2;
             }
         }
@@ -1020,6 +1023,9 @@ public:
             }
             DEFAULT_CELL_DEATH_PROB /= 2;
             for (auto& [type, prob] : CELL_DEATH_PROB) {
+                prob /= 2;
+            }   
+            for (auto &[type, prob] : LEAVE_PROB) {
                 prob /= 2;
             }
         }
@@ -1085,10 +1091,11 @@ public:
             
             step();
 
-            if (current_step % 100 == 0) {
-                
+            if (current_step % 1000 == 0) {
                 adjustDivisionProb();
+            }
 
+            if (current_step % 100 == 0) {
                 auto time_now = std::chrono::system_clock::now();   
                 std::chrono::seconds time_elapsed_total = std::chrono::duration_cast<std::chrono::seconds>(time_now - step_start_time);
                 int minutes = time_elapsed_total.count() / 60;
