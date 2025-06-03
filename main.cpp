@@ -434,6 +434,8 @@ public:
         map<CellType, int> deaths_by_type;
         map<CellType, int> leaving_by_type;
     } stats;
+
+    int equilibriate_steps;
      
     // init
     BoneMarrow(
@@ -532,7 +534,7 @@ public:
                         HSPC_num++;
                     }
 
-                    cells.push_back(make_unique<Cell>(x/2, y, radius, type, clone_id));
+                    cells.push_back(make_unique<Cell>(x, y, radius, type, clone_id));
                 }
                 starting_cells += num;
             }
@@ -748,31 +750,35 @@ public:
                 }
 
                 float overlap = c1->radius + c2->radius - distance;
-
-                if (overlap > 0) {
+                
+                // Define repulsion parameters
+                const float repulsion_multiplier = 1.5f; // How much larger than contact distance for repulsion
+                float repulsion_distance = (c1->radius + c2->radius) * repulsion_multiplier;
+                
+                // Check if cells are within repulsion range
+                if (distance < repulsion_distance) {
                     float nx = x_diff / distance;
                     float ny = y_diff / distance;
-
-                    // Calculate the displacement of the cells (Hookean spring)
-                    const float k = 1.0f;
-                    float displacement = k * overlap * dt;
                     float total_mass = c1->mass + c2->mass;
+                    
+                    float displacement = 0.0f;
+                    
+                    const float k = 0.8f;
+                    displacement = k * (repulsion_distance - distance) * dt;
+                    
                     float displacement_c1 = displacement * c2->mass / total_mass;
                     float displacement_c2 = displacement * c1->mass / total_mass;
 
                     std::scoped_lock lock(c1->cell_mutex, c2->cell_mutex);
-
-                    // Accumulate displacements
+                    
                     if (c1->getType() != STROMA) {
                         displacements[idx].first += nx * displacement_c1;
                         displacements[idx].second += ny * displacement_c1;
                     }
-                    
                     if (c2->getType() != STROMA) {
                         displacements[c2_idx].first -= nx * displacement_c2;
                         displacements[c2_idx].second -= ny * displacement_c2;
                     }
-            
                 }
             }
         }
@@ -897,18 +903,20 @@ public:
         // 3. Check for collisions and resolve them
         auto resolve_collision_start = std::chrono::high_resolution_clock::now();
 
-        float small_time_step = 0.2; // 1 min
+        float small_time_step = 0.1; // 1 min
         int num_inner_steps = 100; // big loop is 10 mins
 
-        float disp = 1000;
-
-        for (int i = 0; i < num_inner_steps; ++i) {
+        float disp;
+        int i;
+        for (i = 0; i < num_inner_steps; ++i) {
             disp = resolveCollisions(small_time_step);
-            if (disp < 30) {
+            if ( i > 5 && disp < 50) {
                 // cout << "Stopping at step " << i << endl;
                 break;
             }
         }
+        equilibriate_steps = i;
+        // cout << "Equilibriated in " << equilibriate_steps << " steps, with disp " << disp << endl;
 
         auto resolve_collision_end = std::chrono::high_resolution_clock::now();
         timings["resolve_collision"] = resolve_collision_end - resolve_collision_start;
@@ -1103,7 +1111,9 @@ public:
 
                 cout << "Step " << current_step << ": " << cells.size() << " cells";
                 cout << " | Deaths: " << stats.total_deaths << " | Leaving: " << stats.total_leaving;
-                cout << " | Iter time: " << minutes << "m " << seconds << "s" << endl;
+                cout << " | Iter time: " << minutes << "m " << seconds << "s";
+                cout << " | Equil in " << equilibriate_steps << " steps";
+                cout << endl;
                 
                 if (true) {
                     if (!latest_step_timings.empty()) {
@@ -1140,7 +1150,7 @@ public:
         float radius = get_with_default(CELL_RADII, Myeloblast1, DEFAULT_CELL_RADII);
 
         cells.push_back(std::make_unique<Cell>(20, 20, radius, Myeloblast1, 0));
-        cells.push_back(std::make_unique<Cell>(21, 20, radius, Myeloblast1, 0));
+        // cells.push_back(std::make_unique<Cell>(20, 30, radius, Myeloblast1, 0));
 
         cells.push_back(std::make_unique<Cell>(21, 21, radius, Myeloblast1, 0));
         cells.push_back(std::make_unique<Cell>(19, 21, radius, Myeloblast1, 0));
@@ -1155,7 +1165,7 @@ public:
 
         writeCellDataToFile(0);
 
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < 100; i++) {
             updateSpatialGrid();
             resolveCollisions(0.1);
             writeCellDataToFile(i+1);
