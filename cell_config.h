@@ -14,7 +14,9 @@ constexpr float VESSEL_LEAVING_MULTIPLIER = 20.0f;
 constexpr float CXCL_DENSITY_PER_100_AREA = 15.0f;
 constexpr int MAX_CELLS = 3500; // conservative upper bound
 constexpr float MAX_CELLS_LOW_MULTIPLIER = 0.75f; // below this, increase div prob
-constexpr int SPATIAL_GRID_BLOCK_SIZE = 15;
+constexpr int SPATIAL_GRID_BLOCK_SIZE = 20;
+constexpr int CELL_SENSE_RADIUS = 15;
+constexpr int MAX_HSPC_NEIGHBOURS = 2;
 
 // consdier the time step to be 10 mins
 constexpr float TIME_UNITS_PER_DAY = 144.0f; 

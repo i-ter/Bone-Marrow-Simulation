@@ -22,31 +22,50 @@
 // OpenMP support with fallback. fallback runs single threaded, OpenMP not needed to be linked.
 #ifdef _OPENMP
     #include <omp.h>
-    // Thread-local random number generators to avoid contention
-    thread_local std::mt19937 tl_gen(std::random_device{}());
+#else  
+    inline int omp_get_max_threads() { return 1; }
+    inline int omp_get_thread_num() { return 0; }
+#endif
+
+// Global seed for reproducibility
+unsigned int GLOBAL_SEED = 10; 
+
+// Function to get thread-safe random generators
+std::mt19937& get_thread_rng() {
+    #ifdef _OPENMP
+        thread_local std::mt19937 tl_gen(GLOBAL_SEED + omp_get_thread_num());
+    #else
+        static std::mt19937 tl_gen(GLOBAL_SEED);
+    #endif
+        return tl_gen;
+}
+
+// Thread-local distributions
+#ifdef _OPENMP
     thread_local std::uniform_real_distribution<> tl_unif_01(0, 1);
     thread_local std::uniform_real_distribution<float> tl_angle_dist(0, 2 * M_PI);
     thread_local std::normal_distribution<float> tl_normal_dist(0, 1);
 #else  
-    inline int omp_get_max_threads() { return 1; }
-    inline int omp_get_thread_num() { return 0; }
-
-    // Thread-local random number generators to avoid contention
-    std::mt19937 tl_gen(std::random_device{}());
     std::uniform_real_distribution<> tl_unif_01(0, 1);
     std::uniform_real_distribution<float> tl_angle_dist(0, 2 * M_PI);
     std::normal_distribution<float> tl_normal_dist(0, 1);
 #endif
 
 
+
 using namespace std;
-namespace fs = std::filesystem;
 
 
 // Wrapper functions for easier migration
-inline float get_random_01() { return tl_unif_01(tl_gen); }
-inline float get_random_angle() { return tl_angle_dist(tl_gen); }
-inline float get_random_normal() { return tl_normal_dist(tl_gen); }
+inline float get_random_01() { return tl_unif_01(get_thread_rng()); }
+inline float get_random_angle() { return tl_angle_dist(get_thread_rng()); }
+inline float get_random_normal() { return tl_normal_dist(get_thread_rng()); }
+
+// Helper function for random integer in range [0, max_val)
+inline int get_random_int(int max_val) {
+    std::uniform_int_distribution<int> int_dist(0, max_val - 1);
+    return int_dist(get_thread_rng());
+}
 
 class BloodVessel
 {
@@ -291,7 +310,9 @@ struct SpatialGrid
         grid_height = ceil(height / block_size);
         grid.resize(grid_width, vector<vector<Cell *>>(grid_height));
         grid_block_cell_counts.resize(grid_width, vector<int>(grid_height, 0));
-        grid_block_density_limit = (block_size * block_size * 0.9) / (M_PI * 5 * 5);
+
+        // upper bound. 
+        grid_block_density_limit = (block_size * block_size) / (M_PI * 5 * 5);
     }
 
 
@@ -341,6 +362,29 @@ struct SpatialGrid
             }
         }
         return overcrowded_blocks > valid_blocks / 2;
+    }
+    
+    int countHSPCNeighbours(const Cell *cell) {
+        int count = 0;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                int nx = cell->grid_x + dx;
+                int ny = cell->grid_y + dy;
+                if (nx >= 0 && nx < grid_width && ny >= 0 && ny < grid_height) {
+                    for (Cell *other : grid[nx][ny]) {
+                        // check if other is close by HSPC
+                        if (
+                            other != cell &&
+                            other->getType() < Erythroblast1 &&
+                            cell->distanceFrom(*other) <= CELL_SENSE_RADIUS
+                        ) {
+                            count++;
+                        }
+                    }
+                }
+            }
+        }
+        return count;
     }
 
     vector<Cell *> getPotentialCollisions(const Cell *cell) {
@@ -456,8 +500,8 @@ public:
           stop_motility_at_step(stop_motility_at_step),
           data_write_freq(data_write_freq)
     {
-        if (!fs::exists(dataDir)) {
-            fs::create_directory(dataDir);
+        if (!std::filesystem::exists(dataDir)) {
+            std::filesystem::create_directory(dataDir);
         }
 
         // Save simulation parameters in CSV format
@@ -474,6 +518,7 @@ public:
                    << "max_speed," << MAX_SPEED << endl
                    << "vessel_distance_threshold," << VESSEL_DISTANCE_THRESHOLD << endl
                    << "vessel_leaving_multiplier," << VESSEL_LEAVING_MULTIPLIER << endl
+                   << "random_seed," << GLOBAL_SEED << endl
                    << "cold_start," << cold_start << endl
                    << "stop_motility_at_step," << stop_motility_at_step << endl;
         paramsFile.close();
@@ -555,18 +600,6 @@ public:
         cout << "Generated " << nStromaCells << " stroma cells" << endl;
 
         generateBloodVessels();
-    }
-
-    // Generate a random blood vessel
-    BloodVessel generateRandomVessel()
-    {
-        float start_x = get_random_01() * width;
-        float start_y = get_random_01() * height;
-        float length = 100 + get_random_01() * 500;
-        float radius = 20 + get_random_01() * 30;
-        float angle = get_random_angle();
-
-        return BloodVessel(start_x, start_y, length, radius, angle);
     }
 
     void generateFixedVessels()
@@ -670,7 +703,7 @@ public:
     }
 
     void moveCells() {
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         for (size_t idx = 0; idx < cells.size(); ++idx) {
             Cell* cell = cells[idx].get();
             // swapping cells with neighbours
@@ -678,7 +711,7 @@ public:
                 // find a random neighbour
                 vector<Cell *> neighbours = spatial_grid.getValidNeighbours(cell, 10);
                 if (neighbours.size() > 0) {
-                    Cell *random_neighbour = neighbours[rand() % neighbours.size()];
+                    Cell *random_neighbour = neighbours[get_random_int(neighbours.size())];
 
                     #pragma omp critical
                     {
@@ -702,7 +735,7 @@ public:
     }
 
     void handleVesselCollisions() {
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         for (size_t idx = 0; idx < cells.size(); ++idx) {
             // Cell* cell = cells[idx].get();
             cells[idx]->in_vessel_neighbourhood = false;
@@ -726,7 +759,7 @@ public:
         }
         
         // Calculate all displacements
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         for (size_t idx = 0; idx < cells.size(); ++idx) {
             Cell* c1 = cells[idx].get();
 
@@ -802,10 +835,16 @@ public:
     }
 
     void handleCellDivision(std::vector<std::unique_ptr<Cell>> &new_cells) {
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         for (size_t idx = 0; idx < cells.size(); ++idx) {
             auto &cell = cells[idx];
-            
+
+            if (cell->getType() == HSC) {
+                if (spatial_grid.countHSPCNeighbours(cell.get()) > MAX_HSPC_NEIGHBOURS) {
+                    continue;
+                }
+            }
+
             if (cell->should_divide() && !spatial_grid.isGridBlockNeighbourOvercrowded(cell->grid_x, cell->grid_y)) 
             {                
                 CellType new_type = sampleRandomType(cell->getType());
@@ -848,7 +887,7 @@ public:
         int num_threads = omp_get_max_threads();
         std::vector<BoneMarrow::Stats> thread_stats(num_threads);
 
-        #pragma omp parallel for schedule(dynamic)
+        #pragma omp parallel for schedule(static)
         for (size_t idx = 0; idx < cells.size(); ++idx) {
             int tid = omp_get_thread_num();
             Cell* cell = cells[idx].get();
@@ -1210,6 +1249,9 @@ int main(int argc, char *argv[])
             else if ((arg == "--vessels" || arg == "-v") && i + 1 < argc) {
                 num_vessels = stoi(argv[++i]);
             }
+            else if ((arg == "--seed" || arg == "-seed") && i + 1 < argc) {
+                GLOBAL_SEED = stoi(argv[++i]);
+            }
             else if ((arg == "--cold_start" || arg == "-cs") && i + 1 < argc) {
                 string cold_start_str = argv[++i];
                 // transform(cold_start_str.begin(), cold_start_str.end(), cold_start_str.begin(), ::tolower);
@@ -1235,6 +1277,7 @@ int main(int argc, char *argv[])
                      << "  --steps NUM        Set simulation steps (default: 200)\n"
                      << "  --name NAME        Set simulation name (default: bm_sim)\n"
                      << "  --vessels NUM      Set number of blood vessels (default: 10)\n"
+                     << "  --seed SEED        Set random seed for reproducibility (default: 42)\n"
                      << "  --help             Display this help message\n"
                      << "  --cold_start       Cold start the simulation (default: false)\n"
                      << "  --stop_motility   Stop motility at step (default: -1)\n"
@@ -1252,6 +1295,7 @@ int main(int argc, char *argv[])
     cout << "  Blood vessels: " << num_vessels << "\n";
     cout << "  Steps: " << steps << "\n";
     cout << "  Simulation name: " << sim_name << "\n";
+    cout << "  Random seed: " << GLOBAL_SEED << "\n";
     cout << "  Cold start: " << cold_start << "\n";
     cout << "  Stop motility: " << stop_motility_at_step << "\n";
     cout << "  Stop motility completely: " << smc << "\n";

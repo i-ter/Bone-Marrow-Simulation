@@ -6,7 +6,7 @@ A parallelized particle-based simulation of cellular dynamics within the bone ma
 
 This project simulates the behavior and interactions of hematopoietic cells in the bone marrow of a mouse. Key features include:
 
-- Cell motility: Cells move throughout the 2D bone marrow space
+- Cell motility: Cells move throughout in Euclidean space
 - Volume exclusion: Inter-cell collisions modeled via Hookean (spring) potentials
 - Full hematopoietic lineage: Realistic modeling of division along the complete hematopoietic lineage tree
 - Cell exit and death: Cells can leave the marrow through blood vessels or die, reflecting physiological turnover
@@ -15,12 +15,12 @@ This simulation provides a computational framework for studying spatial organiza
 
 ## Build Instructions
 
-```bash
-# Clone the repository
-git clone <repository-url>
-cd <repository-name>
+The Makefile contains instructions for `clang` compiler
 
-# Build the simulation
+```bash
+
+git clone https://github.com/i-ter/Bone-Marrow-Simulation.git
+cd Bone-Marrow-Simulation
 make all
 
 # Run the simulation
@@ -57,4 +57,15 @@ All these classes are defined in `main.cpp`.
 The simulation is parallelized using OpenMP. The main parallelized parts are the cell movement updates and interaction calculations. It uses the `#pragma omp parallel for` directive.
 
 There is a fallback to sequential execution if OpenMP is not available, which is supported out of the box.
+
+## How to run on Imperial HPC cluster
+
+```bash
+ssh -X {username}@login.cx3.hpc.imperial.ac.uk
+git clone https://github.com/i-ter/Bone-Marrow-Simulation.git
+cd Bone-Marrow-Simulation
+bash hpc_compile.sh
+qsub run_sim.pbs
+qstat -u {username}
+```
 
