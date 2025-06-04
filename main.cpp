@@ -1154,7 +1154,7 @@ public:
                 cout << " | Equil in " << equilibriate_steps << " steps";
                 cout << endl;
                 
-                if (true) {
+                if (false) {
                     if (!latest_step_timings.empty()) {
                         cout << "Timings (ms):" << endl;
                         for(const auto& pair : latest_step_timings) {
