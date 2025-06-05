@@ -72,10 +72,9 @@ echo "Submitting $N_JOBS jobs with name: $NAME, smc: $SMC"
 
 # Loop through each job
 for ((i=1; i<=N_JOBS; i++)); do
-    # Create temporary PBS file name
     temp_pbs_file="${TEMP_PBS_PREFIX}_${i}.pbs"
     
-    # Create PBS file from scratch with correct arguments
+    # Create PBS file from scratch
     cat > "$temp_pbs_file" << EOF
 #PBS -l walltime=24:00:00
 #PBS -l select=1:ncpus=12:mem=20gb:ompthreads=12:cpu_type=icelake
@@ -84,16 +83,8 @@ ml GCC
 
 \$PBS_O_WORKDIR/main --width 500 --height 500 --steps 300000 --cold_start true --cells 3 -smc $SMC -dwf 500 --seed $i --name ${NAME}_seed_$i
 EOF
-    
     echo "Submitting job $i with seed $i..."
-    
-    # Submit the job
-    # qsub "$temp_pbs_file"
-    
-    # Clean up temporary PBS file
-    # rm "$temp_pbs_file"
-    
-    # Optional: Add a small delay between submissions
+    qsub "$temp_pbs_file"
     sleep 1
 done
 
