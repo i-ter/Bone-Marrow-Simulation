@@ -7,7 +7,6 @@ SMC=""
 BASE_PBS_FILE="run_sim.pbs"
 TEMP_PBS_PREFIX="run_sim_seed"
 
-# Function to display usage
 usage() {
     echo "Usage: $0 --name <job_name> --smc <true/false> -n_jobs <number>"
     echo "  --name     Name for the job"
