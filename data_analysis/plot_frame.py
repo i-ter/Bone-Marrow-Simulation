@@ -1,24 +1,21 @@
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-import enum
-import numpy as np
-import matplotlib as mpl
-from itertools import cycle
 
 
 run_id = 24
 df = pd.read_csv(f'./data/results/smc_seed_{run_id}_all_steps.csv')
 
 
-def get_step_data(step: int):
+def get_step_data(step: int) -> pd.DataFrame:
     d = df[df.step == step].copy()
     return d
 
-colors = ['orange', 'red', 'green', 'blue', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan'] # ten colors
 
 
 def plot_cells(step_data: pd.DataFrame):
+    colors = ['orange', 'red', 'green', 'blue', 'purple', 'brown', 'pink', 'gray', 'olive', 'cyan']
+
     plt.figure(figsize=(5, 5), dpi=500, facecolor='black')
     ax = plt.gca()
     ax.set_facecolor('black')
@@ -51,45 +48,7 @@ def plot_cells(step_data: pd.DataFrame):
     # plt.show()
 
 
-# plot_cells(get_step_data(50000))
-
-def plot_clonal_frequency(df):
-    clones_count =df.groupby(['step', 'clone_id']).size().reset_index(name='count')
-    clones_count = clones_count[clones_count['clone_id'] >= 0]
-    clones_count['percentage'] = clones_count.groupby('step')['count'].transform(lambda x: x / x.sum())
-    d=clones_count.pivot(index='step', columns='clone_id', values='percentage')
-
-    # Calculate total number of cells per step
-    total_cells = df.groupby('step').size()
-
-    fig, ax = plt.subplots(figsize=(7, 5), dpi=100, facecolor='white')
-    d.plot(cmap='Set1', ax=ax)
-
-    # # Add secondary y-axis for total cell count
-    # ax2 = ax.twinx()
-    # total_cells.plot(ax=ax2, color='black', linewidth=2, alpha=0.7, label='Total Cells')
-    # ax2.set_ylabel('Total Number of Cells', fontsize=14, color='black')
-    # ax2.tick_params(axis='y', labelsize=12, colors='black')
-    # ax2.grid(False)
-
-    # Add title and axis labels for poster printing
-    ax.set_title('Fraction of Cells Belonging to Each Clone Over Time', fontsize=16, fontweight='bold')
-    ax.set_xlabel('Simulation Step', fontsize=14)
-    ax.set_ylabel('Fraction of Cells per Clone', fontsize=14)
-
-    # Improve grid and tick parameters for clarity
-    ax.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
-    ax.tick_params(axis='both', which='major', labelsize=12)
-
-    # # Optionally add a legend for the secondary axis
-    # lines, labels = ax.get_legend_handles_labels()
-    # lines2, labels2 = ax2.get_legend_handles_labels()
-    # ax2.legend(lines + lines2, labels + labels2, loc='upper right', fontsize=12)
-
-    plt.tight_layout()
-    plt.show()
-
-def plot_clonal_frequency_sns(df):
+def plot_clonal_frequency(df: pd.DataFrame):
     clones_count = df.groupby(['step', 'clone_id']).size().reset_index(name='count')
     clones_count = clones_count[clones_count['clone_id'] >= 0]
     clones_count['percentage'] = clones_count.groupby('step')['count'].transform(lambda x: x / x.sum())
@@ -115,5 +74,5 @@ def plot_clonal_frequency_sns(df):
 
     # plt.show()
 
-# plot_clonal_frequency(df)
-plot_clonal_frequency_sns(df)
+# plot_cells(get_step_data(50000))
+plot_clonal_frequency(df)
