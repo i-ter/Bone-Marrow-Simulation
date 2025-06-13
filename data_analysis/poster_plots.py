@@ -3,7 +3,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
-run_id = 5
+run_id = 26
 df = pd.read_csv(f'./data/results/smc_seed_{run_id}_all_steps.csv')
 
 
@@ -53,7 +53,13 @@ def plot_clonal_frequency(df: pd.DataFrame):
     clones_count = clones_count[clones_count['clone_id'] >= 0]
     clones_count['percentage'] = clones_count.groupby('step')['count'].transform(lambda x: x / x.sum())
 
-    plt.figure(figsize=(7, 5), dpi=100, facecolor='white')
+    plt.figure(figsize=(8, 5), dpi=200, facecolor='white')
+    
+    # Get the Set1 color palette
+    set1_colors = sns.color_palette('Set1', n_colors=len(clones_count['clone_id'].unique()))
+    clone_color_map = dict(zip(sorted(clones_count['clone_id'].unique()), set1_colors))
+    
+    # Plot the lines
     sns.lineplot(
         data=clones_count,
         x='step',
@@ -64,15 +70,45 @@ def plot_clonal_frequency(df: pd.DataFrame):
         linewidth=2,
         alpha=0.8
     )
-    plt.title('Fraction of Cells Belonging to Each Clone Over Time', fontweight='bold', fontsize=15)
-    plt.xlabel('Simulation Step', fontsize=12)
-    plt.ylabel('% of cell population per clone', fontsize=12)
-    plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
-    plt.tick_params(axis='both', which='major', labelsize=12)
-    plt.tight_layout()
-    # plt.savefig(f'./figures/smc_seed_{run_id}_clonal_frequency.png', facecolor='white', pad_inches=0.3)
+    
+    # Add colored bands above threshold for each clone
+    threshold = 2/3
+    for clone_id in clones_count['clone_id'].unique():
+        clone_data = clones_count[clones_count['clone_id'] == clone_id].sort_values('step')
+        above_threshold = (clone_data['percentage'] > threshold) & (clone_data['step'] >= 500)
+        
+        if above_threshold.any():
+            plt.fill_between(
+                clone_data['step'], 
+                0, 
+                1,
+                where=above_threshold,
+                color=clone_color_map[clone_id],
+                alpha=0.3,
+                interpolate=True,
+                edgecolor=clone_color_map[clone_id],
+                linewidth=2
+            )
 
-    plt.show()
+    plt.axhline(y=threshold, color='black', linestyle='--', linewidth=1.5, alpha=0.8)
+    
+    # Add text label on the threshold line
+    plt.text(140000, threshold, 'Dominance Threshold', fontsize=10, 
+             ha='center', va='bottom', color='black', fontweight='bold')
+    
+    # plt.title('Clonal Dynamics in a Simulation', fontweight='bold', fontsize=15)
+    plt.xlabel('Time (simulation steps)', fontsize=17)
+    plt.ylabel('Clone size (%)', fontsize=17)
+    plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
+    plt.tick_params(axis='both', which='major', labelsize=13)
+    
+    # Update legend title and position it at the bottom
+    legend = plt.legend(title='Clone ID', fontsize=15, loc='upper right')
+    legend.get_title().set_fontweight('bold')
+    plt.tight_layout()
+    plt.savefig(f'./figures/smc_seed_{run_id}_clonal_frequency.png', facecolor='white', pad_inches=0.3)
+
+    # plt.show()
 
 # plot_cells(get_step_data(50000))
 plot_clonal_frequency(df)
