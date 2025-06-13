@@ -3,7 +3,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
-run_id = 24
+run_id = 5
 df = pd.read_csv(f'./data/results/smc_seed_{run_id}_all_steps.csv')
 
 
@@ -53,7 +53,7 @@ def plot_clonal_frequency(df: pd.DataFrame):
     clones_count = clones_count[clones_count['clone_id'] >= 0]
     clones_count['percentage'] = clones_count.groupby('step')['count'].transform(lambda x: x / x.sum())
 
-    plt.figure(figsize=(7, 5), dpi=200, facecolor='white')
+    plt.figure(figsize=(7, 5), dpi=100, facecolor='white')
     sns.lineplot(
         data=clones_count,
         x='step',
@@ -70,9 +70,9 @@ def plot_clonal_frequency(df: pd.DataFrame):
     plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
     plt.tick_params(axis='both', which='major', labelsize=12)
     plt.tight_layout()
-    plt.savefig(f'./figures/smc_seed_{run_id}_clonal_frequency.png', facecolor='white', pad_inches=0.3)
+    # plt.savefig(f'./figures/smc_seed_{run_id}_clonal_frequency.png', facecolor='white', pad_inches=0.3)
 
-    # plt.show()
+    plt.show()
 
 # plot_cells(get_step_data(50000))
 plot_clonal_frequency(df)
