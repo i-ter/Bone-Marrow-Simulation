@@ -1,10 +1,7 @@
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-
-
-run_id = 26
-df = pd.read_csv(f'./data/results/smc_seed_{run_id}_all_steps.csv')
+from matplotlib.patches import Rectangle
 
 
 def get_step_data(step: int) -> pd.DataFrame:
@@ -19,15 +16,17 @@ def plot_cells(step_data: pd.DataFrame):
     plt.figure(figsize=(5, 5), dpi=500, facecolor='black')
     ax = plt.gca()
     ax.set_facecolor('black')
+    
     for _, row in step_data.iterrows():
         # color = colors[row['clone_id'].astype(int)] if row['clone_id'] >= 0 else 'gray'
         color = 'blue'
-        size = 4
-        alpha = 0.3
+        size = 2
+        alpha = 0.6
 
         if row['cell_type'] <= 9:
             color = 'red'
-            alpha = 0.7
+            alpha = 0.9
+            size = 3
         elif row['cell_type'] == 40:
             size = 6
             color = 'gray'
@@ -36,6 +35,31 @@ def plot_cells(step_data: pd.DataFrame):
             color = 'gray'
         circle = plt.Circle((row['x'], row['y']), size, color=color, alpha=alpha)
         ax.add_patch(circle)
+    # Load and plot blood vessels first (so they appear behind cells)
+    vessels_df = pd.read_csv(f'./data/results/mot_seed_{run_id}_vessels.csv')
+    
+    for _, vessel in vessels_df.iterrows():
+        # Calculate the vessel as a rectangle
+        start_x, start_y = vessel['start_x'], vessel['start_y']
+        end_x, end_y = vessel['end_x'], vessel['end_y']
+        radius = vessel['radius']
+        
+        # Calculate vessel length and angle
+        length = ((end_x - start_x)**2 + (end_y - start_y)**2)**0.5
+        
+        rect = Rectangle(
+            (min(start_x, end_x)-70, start_y-radius),
+            abs(end_x - start_x)+140,
+            2 * (radius),
+            # facecolor='green',
+            # alpha=0.5,  # Translucent
+            edgecolor='green',
+            linewidth=3,
+            linestyle='--',
+            fill=False,
+            hatch='/////',
+        )
+        ax.add_patch(rect)
 
     ax.set_xlim(0, 500)
     ax.set_ylim(0, 500)
@@ -53,7 +77,7 @@ def plot_clonal_frequency(df: pd.DataFrame):
     clones_count = clones_count[clones_count['clone_id'] >= 0]
     clones_count['percentage'] = clones_count.groupby('step')['count'].transform(lambda x: x / x.sum())
 
-    plt.figure(figsize=(8, 5), dpi=200, facecolor='white')
+    plt.figure(figsize=(8, 5), facecolor='white')
     
     # Get the Set1 color palette
     set1_colors = sns.color_palette('Set1', n_colors=len(clones_count['clone_id'].unique()))
@@ -93,8 +117,8 @@ def plot_clonal_frequency(df: pd.DataFrame):
     plt.axhline(y=threshold, color='black', linestyle='--', linewidth=1.5, alpha=0.8)
     
     # Add text label on the threshold line
-    plt.text(140000, threshold, 'Dominance Threshold', fontsize=10, 
-             ha='center', va='bottom', color='black', fontweight='bold')
+    # plt.text(140000, threshold, 'Dominance Threshold', fontsize=10, 
+    #          ha='center', va='bottom', color='black', fontweight='bold')
     
     # plt.title('Clonal Dynamics in a Simulation', fontweight='bold', fontsize=15)
     plt.xlabel('Time (simulation steps)', fontsize=17)
@@ -106,9 +130,12 @@ def plot_clonal_frequency(df: pd.DataFrame):
     legend = plt.legend(title='Clone ID', fontsize=15, loc='upper right')
     legend.get_title().set_fontweight('bold')
     plt.tight_layout()
-    plt.savefig(f'./figures/smc_seed_{run_id}_clonal_frequency.png', facecolor='white', pad_inches=0.3)
+    plt.savefig(f'./figures/smc_seed_{run_id}_clonal_frequency.png', pad_inches=0.3, dpi=200)
 
     # plt.show()
+
+run_id = 26
+df = pd.read_csv(f'./data/results/smc_seed_{run_id}_all_steps.csv')
 
 # plot_cells(get_step_data(50000))
 plot_clonal_frequency(df)
