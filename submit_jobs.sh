@@ -89,8 +89,6 @@ EOF
         echo "  Submitting job $i (seed $i) for swap_motility $swap_motility..."
         if [ "$DRY_RUN" = true ]; then
             echo "    DRY RUN: Would execute: qsub $temp_pbs_file"
-            echo "    PBS file content:"
-            cat "$temp_pbs_file" | sed 's/^/      /'
         else
             qsub "$temp_pbs_file"
         fi
