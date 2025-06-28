@@ -1,6 +1,0 @@
-#PBS -l walltime=24:00:00
-#PBS -l select=1:ncpus=12:mem=20gb:ompthreads=12:cpu_type=icelake
-
-ml GCC
-
-$PBS_O_WORKDIR/main --width 500 --height 500 --steps 300000 --cold_start true --cells 3 -smc false -dwf 500 --name mot_control
