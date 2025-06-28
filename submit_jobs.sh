@@ -98,6 +98,3 @@ done
 
 echo ""
 echo "All $total_jobs jobs submitted!"
-echo "Job naming convention: ${NAME}_sm[VALUE]_seed_[SEED]"
-echo "  where [VALUE] is swap_motility with dots replaced by underscores"
-echo "  and [SEED] is the random seed number"
