@@ -3,15 +3,19 @@
 # Default values
 N_JOBS=0
 NAME=""
-SMC=""
-BASE_PBS_FILE="run_sim.pbs"
-TEMP_PBS_PREFIX="run_sim_seed"
+TEMP_PBS_PREFIX="run"
+DRY_RUN=false
+
+# Define the swap_motility values to loop over
+SWAP_MOTILITY_VALUES=( 0.05 0.10 0.20 0.30 0.50 1.00)
 
 usage() {
-    echo "Usage: $0 --name <job_name> --smc <true/false> -n_jobs <number>"
+    echo "Usage: $0 --name <job_name> -n_jobs <number> [--dry-run]"
     echo "  --name     Name for the job"
-    echo "  --smc      stop motility flag (true or false)"
-    echo "  -n_jobs    Number of jobs to submit (default: 10)"
+    echo "  -n_jobs    Number of jobs to submit per swap_motility value (default: 10)"
+    echo "  --dry-run  Show what jobs would be submitted without actually submitting them"
+    echo ""
+    echo "This script will submit jobs for each swap_motility value: ${SWAP_MOTILITY_VALUES[*]}"
     exit 1
 }
 
@@ -22,13 +26,13 @@ while [[ $# -gt 0 ]]; do
             NAME="$2"
             shift 2
             ;;
-        --smc)
-            SMC="$2"
-            shift 2
-            ;;
         -n_jobs)
             N_JOBS="$2"
             shift 2
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
             ;;
         -h|--help)
             usage
@@ -46,45 +50,56 @@ if [ -z "$NAME" ]; then
     usage
 fi
 
-if [ -z "$SMC" ]; then
-    echo "Error: --smc is required"
-    usage
-fi
-
-if [[ "$SMC" != "true" && "$SMC" != "false" ]]; then
-    echo "Error: --smc must be 'true' or 'false'"
-    usage
-fi
-
 if ! [[ "$N_JOBS" =~ ^[0-9]+$ ]] || [ "$N_JOBS" -le 0 ]; then
     echo "Error: -n_jobs must be a positive integer"
     usage
 fi
 
-# Check if base PBS file exists
-if [ ! -f "$BASE_PBS_FILE" ]; then
-    echo "Error: Base PBS file '$BASE_PBS_FILE' not found!"
-    exit 1
+if [ "$DRY_RUN" = true ]; then
+    echo "DRY RUN MODE - No jobs will actually be submitted"
 fi
+echo "Submitting $N_JOBS jobs per swap_motility value with base name: $NAME"
+echo "Swap motility values: ${SWAP_MOTILITY_VALUES[*]}"
 
-echo "Submitting $N_JOBS jobs with name: $NAME, smc: $SMC"
+total_jobs=$((N_JOBS * ${#SWAP_MOTILITY_VALUES[@]}))
+echo "Total jobs to submit: $total_jobs"
 
-# Loop through each job
-for ((i=1; i<=N_JOBS; i++)); do
-    temp_pbs_file="${TEMP_PBS_PREFIX}_${i}.pbs"
+# Loop through each swap_motility value
+for swap_motility in "${SWAP_MOTILITY_VALUES[@]}"; do
+    echo ""
+    echo "Submitting jobs for swap_motility = $swap_motility"
     
-    # Create PBS file from scratch
-    cat > "$temp_pbs_file" << EOF
+    # Convert swap_motility to a filename-safe string (remove .)
+    swap_motility_str=$(echo "$swap_motility" | sed 's/\.//g')
+    
+    # Loop through each job for this swap_motility value
+    for ((i=1; i<=N_JOBS; i++)); do
+        temp_pbs_file="${TEMP_PBS_PREFIX}_swapm_${swap_motility_str}_seed_${i}.pbs"
+        job_name="${NAME}_swapm_${swap_motility_str}_seed_$i"
+        
+        # Create PBS file from scratch
+        cat > "$temp_pbs_file" << EOF
 #PBS -l walltime=24:00:00
 #PBS -l select=1:ncpus=12:mem=20gb:ompthreads=12:cpu_type=icelake
 
 ml GCC
 
-\$PBS_O_WORKDIR/main --width 500 --height 500 --steps 300000 --cold_start true --cells 3 -smc $SMC -dwf 500 --seed $i --name ${NAME}_seed_$i
+\$PBS_O_WORKDIR/main --width 500 --height 500 --steps 200000 --cold_start true --cells 3 --swap_motility $swap_motility -dwf 500 --seed $i --name $job_name
 EOF
-    echo "Submitting job $i with seed $i..."
-    qsub "$temp_pbs_file"
-    sleep 1
+        echo "  Submitting job $i (seed $i) for swap_motility $swap_motility..."
+        if [ "$DRY_RUN" = true ]; then
+            echo "    DRY RUN: Would execute: qsub $temp_pbs_file"
+            echo "    PBS file content:"
+            cat "$temp_pbs_file" | sed 's/^/      /'
+        else
+            qsub "$temp_pbs_file"
+        fi
+        sleep 1
+    done
 done
 
-echo "All $N_JOBS jobs submitted!"
+echo ""
+echo "All $total_jobs jobs submitted!"
+echo "Job naming convention: ${NAME}_sm[VALUE]_seed_[SEED]"
+echo "  where [VALUE] is swap_motility with dots replaced by underscores"
+echo "  and [SEED] is the random seed number"

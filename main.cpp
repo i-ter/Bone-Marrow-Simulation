@@ -1225,7 +1225,7 @@ int main(int argc, char *argv[])
     bool cold_start = true;
     int stop_motility_at_step = -999;
     int data_write_freq = 1;
-    bool smc = false;
+    float smc = -1.0; // Use -1.0 to indicate not set
 
     // Parse command-line arguments
     if (argc > 1) {
@@ -1257,12 +1257,11 @@ int main(int argc, char *argv[])
                 // transform(cold_start_str.begin(), cold_start_str.end(), cold_start_str.begin(), ::tolower);
                 cold_start = (cold_start_str == "true" || cold_start_str == "1" || cold_start_str == "yes" || cold_start_str == "y");
             }
-            else if ((arg == "--stop_motility" || arg == "-sm") && i + 1 < argc) {
+            else if ((arg == "--stop_motility_at_step") && i + 1 < argc) {
                 stop_motility_at_step = stoi(argv[++i]);
             }
-            else if ((arg == "--stop_motility_completely" || arg == "-smc") && i + 1 < argc) {
-                string smc_str = argv[++i];
-                smc = (smc_str == "true" || smc_str == "1" || smc_str == "yes" || smc_str == "y");
+            else if ((arg == "--swap_motility" || arg == "-sm") && i + 1 < argc) {
+                smc = stof(argv[++i]);
             }
             else if ((arg == "--data_write_freq" || arg == "-dwf") && i + 1 < argc) {
                 data_write_freq = stoi(argv[++i]);
@@ -1280,9 +1279,13 @@ int main(int argc, char *argv[])
                      << "  --seed SEED        Set random seed for reproducibility (default: 42)\n"
                      << "  --help             Display this help message\n"
                      << "  --cold_start       Cold start the simulation (default: false)\n"
-                     << "  --stop_motility   Stop motility at step (default: -1)\n"
+                     << "  --stop_motility_at_step STEP   Stop motility at step (default: -1)\n"
+                     << "  --swap_motility PROB Set swap motility probability (e.g., 0.0, 0.01, 0.5)\n"
                      << "  --data_write_freq  Write data to file every n steps (default: 1)\n";
                 return 0;
+            }
+            else {
+                throw std::runtime_error("Unknown argument: " + arg);
             }
         }
     }
@@ -1298,16 +1301,16 @@ int main(int argc, char *argv[])
     cout << "  Random seed: " << GLOBAL_SEED << "\n";
     cout << "  Cold start: " << cold_start << "\n";
     cout << "  Stop motility: " << stop_motility_at_step << "\n";
-    cout << "  Stop motility completely: " << smc << "\n";
+    cout << "  Swap motility probability: " << smc << "\n";
     #ifdef _OPENMP
         cout << "OpenMP is supported" << " | " << omp_get_max_threads() << " threads" << endl;
     #else
         cout << "OpenMP is not supported" << endl;
     #endif
 
-    if (smc) {
+    if (smc >= 0.0) {
         for (auto& [type, prob] : SWAP_MOTILITY) {
-            prob = 0.0;
+            prob = smc;
         }
     }
 
