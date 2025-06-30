@@ -7,7 +7,7 @@ TEMP_PBS_PREFIX="run"
 DRY_RUN=false
 
 # Define the swap_motility values to loop over
-SWAP_MOTILITY_VALUES=(0.00 0.05 0.10 0.20 0.30 0.50 1.00)
+SWAP_MOTILITY_VALUES=(0.00 0.05 0.10) # 0.20 0.30 0.50 1.00)
 
 usage() {
     echo "Usage: $0 --name <job_name> -n_jobs <number> [--dry-run]"
