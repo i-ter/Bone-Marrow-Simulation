@@ -5,9 +5,10 @@ N_JOBS=0
 NAME=""
 TEMP_PBS_PREFIX="run"
 DRY_RUN=false
+SEED_BASELINE=31
 
 # Define the swap_motility values to loop over
-SWAP_MOTILITY_VALUES=(0.75 1.00)  # (0.00 0.05 0.10 0.20 0.30 0.50 1.00)
+SWAP_MOTILITY_VALUES=(0.00 0.10 0.50)  # (0.00 0.05 0.10 0.20 0.30 0.50 1.00)
 
 usage() {
     echo "Usage: $0 --name <job_name> -n_jobs <number> [--dry-run]"
@@ -73,9 +74,10 @@ for swap_motility in "${SWAP_MOTILITY_VALUES[@]}"; do
     swap_motility_str=$(echo "$swap_motility" | sed 's/\.//g')
     
     # Loop through each job for this swap_motility value
-    for ((i=1; i<=N_JOBS; i++)); do
-        temp_pbs_file="${TEMP_PBS_PREFIX}_swapm_${swap_motility_str}_seed_${i}.pbs"
-        job_name="${NAME}_swapm_${swap_motility_str}_seed_$i"
+    for ((i=0; i<N_JOBS; i++)); do
+        seed=$((SEED_BASELINE + i))
+        temp_pbs_file="${TEMP_PBS_PREFIX}_swapm_${swap_motility_str}_seed_${seed}.pbs"
+        job_name="${NAME}_swapm_${swap_motility_str}_seed_${seed}"
         
         # Create PBS file from scratch
         cat > "$temp_pbs_file" << EOF
@@ -84,9 +86,9 @@ for swap_motility in "${SWAP_MOTILITY_VALUES[@]}"; do
 
 ml GCC
 
-\$PBS_O_WORKDIR/main --width 500 --height 500 --steps 200000 --cold_start true --cells 3 --swap_motility $swap_motility -dwf 500 --seed $i --name $job_name
+\$PBS_O_WORKDIR/main --width 500 --height 500 --steps 200000 --cold_start true --cells 3 --swap_motility $swap_motility -dwf 500 --seed $seed --name $job_name
 EOF
-        echo "  Submitting job $i (seed $i) for swap_motility $swap_motility..."
+        echo "  Submitting job $((i+1)) (seed $seed) for swap_motility $swap_motility..."
         if [ "$DRY_RUN" = true ]; then
             echo "    DRY RUN: Would execute: qsub $temp_pbs_file"
         else
