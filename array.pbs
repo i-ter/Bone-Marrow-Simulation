@@ -1,0 +1,34 @@
+#!/bin/bash
+#PBS -l walltime=24:00:00
+#PBS -l select=1:ncpus=12:mem=20gb:ompthreads=12:cpu_type=icelake
+#PBS -J 1-210
+#PBS -o sim_$PBS_ARRAY_INDEX.out
+#PBS -e sim_$PBS_ARRAY_INDEX.err
+
+# ---BEGIN VARIABLES---
+# These variables are set by submit_jobs.sh
+SWAP_MOTILITY_VALUES=(0.00 0.05 0.10 0.20 0.30 0.50 1.00)
+N_JOBS=30
+SEED_BASELINE=100
+NAME="sim"
+# ---END VARIABLES---
+
+# Calculate parameters for this sub-job based on PBS_ARRAY_INDEX
+task_id=$((PBS_ARRAY_INDEX - 1))
+swap_idx=$((task_id / N_JOBS))
+job_idx=$((task_id % N_JOBS))
+
+swap_motility=${SWAP_MOTILITY_VALUES[$swap_idx]}
+seed=$((SEED_BASELINE + job_idx))
+
+# Create a filename-safe string for swap_motility
+swap_motility_str=$(echo "$swap_motility" | sed 's/\.//g')
+
+# Construct job name for this sub-job
+job_name="${NAME}_${PBS_ARRAY_INDEX}_swapm_${swap_motility_str}_seed_${seed}"
+
+# Load required modules
+ml GCC
+
+# Execute the simulation
+$PBS_O_WORKDIR/main --width 500 --height 500 --steps 200000 --cold_start true --cells 3 --swap_motility $swap_motility -dwf 500 --seed $seed --name $job_name
