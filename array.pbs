@@ -9,7 +9,7 @@
 # These variables are set by submit_jobs.sh
 SWAP_MOTILITY_VALUES=(0.00 0.05 0.10 0.20 0.30 0.50 1.00)
 N_JOBS=30
-SEED_BASELINE=100
+SEED_BASELINE=200
 NAME="sim"
 # ---END VARIABLES---
 
