@@ -28,7 +28,6 @@ $(SIM): $(SRCS) cell_config.h
 	$(CXX) $(CXXFLAGS) $(OMP_CFLAGS) $(SRCS) -o $(SIM) $(LDFLAGS) $(OMP_LDFLAGS)
 #$(CXX) $(CXXFLAGS) $(SRCS) -o $(SIM) $(LDFLAGS)
 
-
 # Movie generator target
 $(MOVIE_GEN): $(MOVIE_SRCS)
 	$(CXX) $(CXXFLAGS) $(MOVIE_SRCS) -o $(MOVIE_GEN) $(LDFLAGS)
