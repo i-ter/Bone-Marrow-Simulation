@@ -36,7 +36,7 @@ def plot_cells(step_data: pd.DataFrame):
         circle = plt.Circle((row['x'], row['y']), size, color=color, alpha=alpha)
         ax.add_patch(circle)
     # Load and plot blood vessels first (so they appear behind cells)
-    vessels_df = pd.read_csv(f'./data/results/mot_seed_{run_id}_vessels.csv')
+    vessels_df = pd.read_csv(f'./data/results_pres/mot_seed_{run_id}_vessels.csv')
     
     for _, vessel in vessels_df.iterrows():
         # Calculate the vessel as a rectangle
@@ -130,12 +130,12 @@ def plot_clonal_frequency(df: pd.DataFrame):
     legend = plt.legend(title='Clone ID', fontsize=15, loc='upper right')
     legend.get_title().set_fontweight('bold')
     plt.tight_layout()
-    plt.savefig(f'./figures/smc_seed_{run_id}_clonal_frequency.png', pad_inches=0.3, dpi=200)
+    plt.savefig(f'./figures/mot_seed_{run_id}_clonal_frequency.png', pad_inches=0.3, dpi=200)
 
     # plt.show()
 
 run_id = 26
-df = pd.read_csv(f'./data/results/smc_seed_{run_id}_all_steps.csv')
+df = pd.read_csv(f'./data/results_pres/smc_seed_{run_id}_all_steps.csv')
 
-# plot_cells(get_step_data(50000))
-plot_clonal_frequency(df)
+plot_cells(get_step_data(50000))
+# plot_clonal_frequency(df)
