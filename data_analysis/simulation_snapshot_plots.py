@@ -197,7 +197,7 @@ def plot_clonal_frequency(df: pd.DataFrame):
 
     # plt.show()
 
-run_id = 11
+run_id = 21
 smc = True  
 
 df = pd.read_csv(f'./simulation/data/results_pres/{'smc' if smc else 'mot'}_seed_{run_id}_all_steps.csv')
