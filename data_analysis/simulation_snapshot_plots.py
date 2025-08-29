@@ -79,18 +79,18 @@ def plot_cells_clonal(step_data: pd.DataFrame, smc: bool):
     ax = plt.gca()
     ax.set_facecolor('black')
 
-    clone_colors = {-1: 'gray', 0: 'yellow', 1: 'blue', 2: 'green'}
+    clone_colors = {-1: 'gray', 0: 'orange', 1: 'violet', 2: 'cyan'}
     
     for _, row in step_data.iterrows():
         # color = colors[row['clone_id'].astype(int)] if row['clone_id'] >= 0 else 'gray'
         color = clone_colors[row['clone_id']]
-        size = 2
+        size = 4
         alpha = 0.6
 
         if row['cell_type'] <= 9:
             color = 'red'
             alpha = 0.9
-            size = 3
+            size = 4
         elif row['cell_type'] == 40:
             size = 6
             color = 'gray'
@@ -100,7 +100,7 @@ def plot_cells_clonal(step_data: pd.DataFrame, smc: bool):
         circle = plt.Circle((row['x'], row['y']), size, color=color, alpha=alpha)
         ax.add_patch(circle)
     # Load and plot blood vessels first (so they appear behind cells)
-    vessels_df = pd.read_csv(f'./simulation/data/results_pres/{'smc' if smc else 'mot'}_seed_{run_id}_vessels.csv')
+    vessels_df = pd.read_csv(f'./data/results_pres/{'smc' if smc else 'mot'}_seed_{run_id}_vessels.csv')
     
     for _, vessel in vessels_df.iterrows():
         # Calculate the vessel as a rectangle
@@ -117,7 +117,7 @@ def plot_cells_clonal(step_data: pd.DataFrame, smc: bool):
             2 * (radius),
             # facecolor='green',
             # alpha=0.5,  # Translucent
-            edgecolor='green',
+            edgecolor='limegreen',
             linewidth=3,
             linestyle='--',
             fill=False,
@@ -131,8 +131,9 @@ def plot_cells_clonal(step_data: pd.DataFrame, smc: bool):
     ax.set_xticks([])  # Remove x-axis ticks
     ax.set_yticks([])  # Remove y-axis ticks
     # plt.title(f'Cells at step={step_data.step.values[0]}')
-    plt.savefig(f'./simulation/figures/{'smc' if smc else 'mot'}_seed_{run_id}_frame_{step_data.step.values[0]}_clonal.png',
+    plt.savefig(f'./figures/{'smc' if smc else 'mot'}_seed_{run_id}_frame_{step_data.step.values[0]}_clonal.png',
                  facecolor='black', bbox_inches='tight', pad_inches=0)
+    print(f'Saved figure to ./figures/{'smc' if smc else 'mot'}_seed_{run_id}_frame_{step_data.step.values[0]}_clonal.png')
     # plt.show()
 
 def plot_clonal_frequency(df: pd.DataFrame):
@@ -200,7 +201,7 @@ def plot_clonal_frequency(df: pd.DataFrame):
 run_id = 21
 smc = True  
 
-df = pd.read_csv(f'./simulation/data/results_pres/{'smc' if smc else 'mot'}_seed_{run_id}_all_steps.csv')
+df = pd.read_csv(f'./data/results_pres/{'smc' if smc else 'mot'}_seed_{run_id}_all_steps.csv')
 df = df[df.step == 200000]
 # plot_cells(get_step_data(50000))
 plot_cells_clonal(df, smc)
